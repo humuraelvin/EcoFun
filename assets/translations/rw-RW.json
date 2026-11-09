@@ -101,7 +101,7 @@
     "step1Hint": "Amakuru y'ibidukikije n'ikirere mu Rwanda",
     "step1Done": "Inkuru yasomwe",
     "step2": "Subiza ibibazo",
-    "step2Hint": "Ibibazo 10 ku bidukikije · amanota 2 kuri buri gisubizo cy'ukuri",
+    "step2Hint": "Ibibazo 10 by'ubuzima bwa buri munsi ku bidukikije · amanota 2 kuri buri gisubizo cy'ukuri",
     "step2Done": "Wabonye {} kuri {}",
     "step3": "Igikorwa cy'umunsi",
     "step3Hint": "Gikore, ufate ifoto, usangize inkuru yawe · +{} amanota",
@@ -149,7 +149,7 @@
     "questionOf": "Ikibazo {} kuri {}",
     "fromStory": "Byakuwe mu nkuru wasomye",
     "preparing": "Turategura ibibazo…",
-    "preparingBody": "Turaguhitiramo ibibazo 10 ku bidukikije…",
+    "preparingBody": "Turaguhitiramo ibibazo 10 by'ubuzima bwa buri munsi ku bidukikije…",
     "correct": "Ni byo!",
     "notQuite": "Si byo",
     "answerWas": "Igisubizo ni: {}",
@@ -171,7 +171,10 @@
       "other": "Usigaranye ibyiciro {} bitanga amanota uyu munsi."
     },
     "noScoredLeft": "Wakoresheje ibyiciro 3 bitanga amanota uyu munsi. Komeza ukine wige!",
-    "playAgain": "Subiza ibindi bibazo"
+    "playAgain": "Subiza ibindi bibazo",
+    "rightAnswer": "Igisubizo cy'ukuri",
+    "why": "Impamvu",
+    "tip": "Icyo wakora"
   },
   "mission": {
     "title": "Igikorwa cy'ikirere",

@@ -293,10 +293,19 @@ class _Feedback extends StatelessWidget {
   final List<String> options;
   final int points;
 
+  /// Splits "Why it is right. Practical tip: do this." into the reason and the tip.
+  static (String, String?) _split(String text) {
+    final m = RegExp(r'\s*(Practical tip|Tip|Impanuro|Inama)\s*:\s*', caseSensitive: false).firstMatch(text);
+    if (m == null) return (text.trim(), null);
+    final tip = text.substring(m.end).trim();
+    return (text.substring(0, m.start).trim(), tip.isEmpty ? null : tip);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final color = answer.correct ? c.bio : c.danger;
+    final (why, tip) = _split(answer.explanation);
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 6),
@@ -306,19 +315,52 @@ class _Feedback extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Icon(answer.correct ? CupertinoIcons.checkmark_seal_fill : CupertinoIcons.info_circle_fill, color: color, size: 20),
+            Icon(answer.correct ? CupertinoIcons.checkmark_seal_fill : CupertinoIcons.xmark_circle_fill, color: color, size: 22),
             const SizedBox(width: 8),
             Text(answer.correct ? 'quiz.correct'.tr() : 'quiz.notQuite'.tr(), style: AppText.headline.c(color)),
             const Spacer(),
             if (answer.correct && points > 0) Text('+$points ${'common.pts'.tr()}', style: AppText.subhead.semibold.c(c.bio)),
           ]),
           if (!answer.correct) ...[
-            const SizedBox(height: 6),
-            Text('quiz.answerWas'.tr(args: [options[answer.correctIndex]]), style: AppText.subhead.semibold.c(c.label)),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(color: c.bioSoft, borderRadius: BorderRadius.circular(12)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('quiz.rightAnswer'.tr(), style: AppText.caption.semibold.c(c.bio)),
+                const SizedBox(height: 2),
+                Text(options[answer.correctIndex], style: AppText.headline.c(c.label)),
+              ]),
+            ),
           ],
-          if (answer.explanation.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(answer.explanation, style: AppText.subhead.c(c.secondaryLabel)),
+          if (why.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(CupertinoIcons.lightbulb_fill, size: 18, color: c.gold),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('quiz.why'.tr(), style: AppText.caption.semibold.c(c.secondaryLabel)),
+                  const SizedBox(height: 2),
+                  Text(why, style: AppText.callout.c(c.label)),
+                ]),
+              ),
+            ]),
+          ],
+          if (tip != null) ...[
+            const SizedBox(height: 10),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(CupertinoIcons.leaf_arrow_circlepath, size: 18, color: c.brand),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('quiz.tip'.tr(), style: AppText.caption.semibold.c(c.secondaryLabel)),
+                  const SizedBox(height: 2),
+                  Text(tip, style: AppText.callout.c(c.label)),
+                ]),
+              ),
+            ]),
           ],
         ],
       ),

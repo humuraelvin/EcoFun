@@ -115,7 +115,7 @@ create table if not exists public.quiz_pool (
   choices_rw      text[] check (choices_rw is null or array_length(choices_rw, 1) = 4),
   explanation_rw  text,
   answer          integer not null check (answer between 0 and 3),
-  source          text not null default 'ai',
+  source          text not null default 'ai-practical',
   fingerprint     text not null unique,
   created_at      timestamptz not null default now()
 );
@@ -551,14 +551,16 @@ end;
 $$;
 
 -- Calls NVIDIA's OpenAI-compatible chat endpoint and returns the parsed JSON object the model wrote.
-create or replace function public._nvidia_chat(p_model text, p_messages jsonb, p_max_tokens integer default 700, p_temperature numeric default 0.1)
+drop function if exists public._nvidia_chat(text, jsonb, integer, numeric);
+create or replace function public._nvidia_chat(p_model text, p_messages jsonb, p_max_tokens integer default 700,
+                                               p_temperature numeric default 0.1, p_timeout integer default 45)
 returns jsonb language plpgsql volatile security definer set search_path = '' as $$
 declare
   resp     record;
   v_content  text;
   body     jsonb;
 begin
-  perform extensions.http_set_curlopt('CURLOPT_TIMEOUT', '45');
+  perform extensions.http_set_curlopt('CURLOPT_TIMEOUT', p_timeout::text);
   perform extensions.http_set_curlopt('CURLOPT_CONNECTTIMEOUT', '10');
   select status, content as c into resp
   from extensions.http((
@@ -865,32 +867,55 @@ $$;
 --    The pool grows by itself: every few minutes AI writes 10 new English questions on a
 --    random topic and Google Translate adds the Kinyarwanda version.
 -- ----------------------------------------------------------------------------
+-- Practical, everyday topics: what ordinary people in Rwanda do at home, at the market, at work and outside.
 create or replace function public._quiz_topics()
 returns text[] language sql immutable set search_path = '' as $$
   select array[
-    'climate change basics', 'greenhouse gases and the greenhouse effect', 'weather versus climate',
-    'carbon footprint of everyday life', 'renewable energy', 'solar power in Rwanda and Africa',
-    'hydropower and dams', 'wind and geothermal energy', 'methane gas in Lake Kivu',
-    'energy saving at home', 'clean cooking stoves and charcoal use', 'electric motorbikes and clean transport in Kigali',
-    'air pollution and health', 'Kigali car-free days', 'plastic pollution', 'Rwanda''s plastic bag ban',
-    'recycling and the circular economy', 'composting and organic waste', 'electronic waste and batteries',
-    'hazardous household waste', 'reduce, reuse, recycle habits', 'food waste', 'fashion and textile waste',
-    'water conservation', 'rainwater harvesting', 'clean water and sanitation', 'rivers and lakes of Rwanda',
-    'wetlands and Nyandungu eco-park', 'Lake Victoria and the Nile basin', 'forests and deforestation',
-    'Nyungwe National Park', 'Akagera National Park', 'Volcanoes National Park and mountain gorillas',
-    'Gishwati-Mukura National Park', 'tree planting and national tree planting day', 'agroforestry and bamboo',
-    'soil erosion and terraces', 'landslides and floods', 'droughts and climate adaptation',
-    'sustainable farming and fertilisers', 'pollinators and bees', 'biodiversity and endangered species',
-    'invasive species such as water hyacinth', 'wildlife protection and poaching', 'birds of Rwanda',
-    'Umuganda community work', 'green cities and urban planning', 'green buildings',
-    'Rwanda Green Fund and climate finance', 'the Paris Agreement and COP climate summits',
-    'oceans, coral reefs and sea level rise', 'glaciers and polar ice', 'the ozone layer', 'deserts and desertification',
-    'carbon sinks such as forests, soils and peatlands', 'mining and the environment', 'urban heat and shade trees',
-    'environmental science vocabulary', 'famous environmental scientists and activists', 'climate myths and facts',
-    'sustainable diets and local food', 'environmental laws and protected areas', 'eco-friendly tourism',
-    'the water cycle', 'the carbon cycle', 'ecosystems and food chains', 'environment and human health',
-    'disaster preparedness for storms and floods', 'sustainable fishing', 'noise and light pollution',
-    'household chemicals and safe alternatives', 'clean energy jobs and green skills', 'climate action by young people'
+    'sorting household waste into biodegradable and non-biodegradable',
+    'what can go into a compost heap and what cannot',
+    'what to do with plastic bottles and plastic packaging',
+    'what to do with old batteries, phones, chargers and bulbs',
+    'what to do with broken glass and glass bottles',
+    'what to do with metal tins and cans',
+    'what to do with old clothes and shoes',
+    'what to do with leftover food and food peelings',
+    'what to do with used cooking oil',
+    'what to do with expired medicines',
+    'why we should never burn rubbish, and what to do instead',
+    'why we should never throw rubbish in rivers, drains or the street',
+    'keeping drains and gutters clean before the rainy season',
+    'saving water at home: taps, washing, bathing',
+    'collecting and using rainwater at home',
+    'keeping drinking water clean and safe',
+    'saving electricity at home: lights, phone chargers, appliances',
+    'cooking with less charcoal and firewood, and using improved stoves',
+    'shopping with reusable bags and avoiding single-use plastic',
+    'choosing products with less packaging at the market',
+    'reusing and repairing things instead of throwing them away',
+    'planting and caring for trees around the home and school',
+    'protecting soil on hillsides from erosion',
+    'kitchen gardens and growing your own vegetables',
+    'using fertilisers and pesticides safely on the farm',
+    'keeping animals and their waste from polluting water',
+    'protecting rivers, lakes and wetlands near you',
+    'protecting wild animals and not buying wildlife products',
+    'keeping your neighbourhood clean and taking part in Umuganda',
+    'good toilet and sanitation habits that protect the environment',
+    'removing standing water where mosquitoes breed',
+    'walking, cycling and sharing rides instead of driving alone',
+    'turning off engines instead of leaving motorbikes or cars running',
+    'keeping public places, buses and parks clean',
+    'saving paper at school and at work',
+    'eco-friendly habits for students at school',
+    'eco-friendly habits at the workplace and in small shops',
+    'staying safe and helping others during floods and heavy rain',
+    'everyday choices that reduce air pollution and smoke',
+    'teaching children simple ways to care for the environment',
+    'recognising which everyday items are biodegradable',
+    'recognising which everyday items are recyclable',
+    'what each colour of waste bin is for and how to use bins properly',
+    'caring for the environment during celebrations, weddings and events',
+    'simple habits that keep Rwanda clean and green'
   ];
 $$;
 
@@ -905,10 +930,11 @@ returns integer language plpgsql volatile security definer set search_path = '' 
 declare
   topics   text[] := public._quiz_topics();
   topic    text := topics[1 + floor(random() * array_length(topics, 1))::integer];
-  angle    text := (array['surprising facts', 'everyday actions people can take', 'examples from Rwanda and East Africa',
-                          'the science behind it', 'common myths versus facts', 'numbers, dates and records',
-                          'causes and effects', 'solutions and innovations'])[1 + floor(random() * 8)::integer];
-  diff     text := (array['easy', 'easy', 'medium', 'medium', 'hard'])[1 + floor(random() * 5)::integer];
+  angle    text := (array['real situations at home', 'real situations at the market and in shops',
+                          'real situations on the farm and in the garden', 'real situations at school',
+                          'real situations on the road and in town', 'real situations at work',
+                          'real situations with children and family'])[1 + floor(random() * 7)::integer];
+  diff     text := (array['easy', 'easy', 'easy', 'medium'])[1 + floor(random() * 4)::integer];
   result   jsonb;
   q        jsonb;
   qs       jsonb[] := '{}';
@@ -917,27 +943,51 @@ declare
   n        integer := 0;
   saved    integer := 0;
   choices  text[];
+  rw_choices text[];
+  msgs     jsonb;
+  perm     integer[];
+  new_answer integer;
   k        integer;
 begin
-  result := public._nvidia_chat(
-    'nvidia/nemotron-3.5-lightning-30b-a3b',
-    jsonb_build_array(
+  msgs := jsonb_build_array(
       jsonb_build_object('role', 'system', 'content',
-        'You write accurate, interesting multiple-choice quiz questions about the environment and climate for EcoFun, ' ||
-        'an app for people in Rwanda. Facts must be correct and widely accepted. Each question has exactly 4 short options, ' ||
-        'exactly one correct. Wrong options must be plausible. Vary which option is correct. Keep questions under 25 words ' ||
-        'and options under 8 words. Never refer to "the text" or "the article". Reply with JSON only.'),
+        'You write quiz questions for EcoFun, an app that teaches ordinary people in Rwanda (market sellers, farmers, ' ||
+        'moto drivers, parents, students) how to take care of the environment in daily life. ' ||
+        'Every question must be PRACTICAL and SIMPLE: what to do, where something goes, which habit is better, what an item is. ' ||
+        'Think of real situations at home, at the market, on the farm, at school, on the road. ' ||
+        'Good examples: "Where should you put banana peels?", "What should you do with an old phone battery?", ' ||
+        '"Which habit saves water when washing dishes?", "Is a plastic bag biodegradable?". ' ||
+        'NEVER ask about numbers, statistics, percentages, years, dates, measurements, records, scientific terms, chemical ' ||
+        'names, laws, agreements, conferences, organisations or famous people. Never ask trick questions. ' ||
+        'Use plain words a 12-year-old understands and correct grammar. Questions under 18 words; each option under 7 words. ' ||
+        'Exactly one option is clearly correct. The three wrong options must be REALISTIC things people really do wrong ' ||
+        '(for example "Burn it", "Throw it in the drain", "Leave the tap running"), never silly or impossible answers. ' ||
+        'Write options as short actions or short answers, not "Yes, because..." sentences. ' ||
+        'The explanation is shown after answering, also to people who chose wrong: in 2 short sentences say why the ' ||
+        'right answer is right and give one practical tip. Reply with JSON only.'),
       jsonb_build_object('role', 'user', 'content',
-        'Write 10 ' || diff || ' questions about "' || topic || '", focusing on ' || angle || '. Random seed: ' ||
+        'Write 10 ' || diff || ' questions about "' || topic || '", using ' || angle || '. Mix these forms across the 10: ' ||
+        '"What should you do with ...?", "Where should ... go?", "Which is the best way to ...?", "Which habit ...?", ' ||
+        '"What is wrong with ...?", "What can you make from ...?" and at most 2 of "Is ... biodegradable?". ' ||
+        'Each question about a different item or situation. Seed: ' ||
         floor(random() * 1000000)::text || '. Return {"questions":[{"question":"...","options":["...","...","...","..."],' ||
-        '"correct_index":0,"explanation":"one short sentence"}]}')),
-    3000, 0.9);
+        '"correct_index":0,"explanation":"Why it is right. Practical tip."}]}'));
+  -- Nemotron Super writes clear, practical questions in ~10 s; Ultra is the slower backup.
+  begin
+    result := public._nvidia_chat('nvidia/nemotron-3.5-super-vl-120b-a12b', msgs, 5000, 0.7, 90);
+  exception when others then
+    result := public._nvidia_chat('nvidia/nemotron-3-ultra-550b-a55b', msgs, 5000, 0.7, 120);
+  end;
 
   for q in select * from jsonb_array_elements(coalesce(result -> 'questions', '[]'::jsonb)) loop
     exit when n >= 10;
     if jsonb_typeof(q -> 'options') = 'array' and jsonb_array_length(q -> 'options') = 4
        and (q ->> 'correct_index') ~ '^[0-3]$'
-       and char_length(coalesce(q ->> 'question', '')) between 10 and 300
+       and char_length(coalesce(q ->> 'question', '')) between 10 and 200
+       -- practical only: no numbers, years, statistics or jargon
+       and (q ->> 'question') || ' ' || (q -> 'options')::text !~ '[0-9%]'
+       and (q ->> 'question') !~* '(estimat|percent|statistic|according to|approximately|primary source|guideline|average|record|which year|founded|agreement|convention|protocol|summit|organi[sz]ation|eutrophic|species is|flagship|ppm|emission factor)'
+       and (select count(*) from jsonb_array_elements_text(q -> 'options') x where btrim(x) ~* '^(yes|no)\M') <= 2
        -- four distinct, non-empty options that don't start mid-sentence
        and (select count(distinct lower(btrim(x))) from jsonb_array_elements_text(q -> 'options') x) = 4
        and not exists (select 1 from jsonb_array_elements_text(q -> 'options') x
@@ -945,7 +995,7 @@ begin
        and not exists (select 1 from public.quiz_pool where fingerprint = public._quiz_fingerprint(q ->> 'question')) then
       qs := qs || q;
       texts := texts || array[btrim(q ->> 'question')] || array(select left(btrim(x), 120) from jsonb_array_elements_text(q -> 'options') x)
-                     || array[left(coalesce(q ->> 'explanation', ''), 300)];
+                     || array[left(coalesce(q ->> 'explanation', ''), 400)];
       n := n + 1;
     end if;
   end loop;
@@ -955,14 +1005,24 @@ begin
 
   for k in 1 .. n loop
     q := qs[k];
+    -- shuffle the four options (and their translations) so the correct one lands anywhere
+    perm := array(select g from generate_series(1, 4) g order by random());
     choices := array(select left(btrim(x), 120) from jsonb_array_elements_text(q -> 'options') x);
+    choices := array[choices[perm[1]], choices[perm[2]], choices[perm[3]], choices[perm[4]]];
+    new_answer := array_position(perm, (q ->> 'correct_index')::integer + 1) - 1;
+    if rw is not null then
+      rw_choices := rw[(k - 1) * 6 + 2 : (k - 1) * 6 + 5];
+      rw_choices := array[rw_choices[perm[1]], rw_choices[perm[2]], rw_choices[perm[3]], rw_choices[perm[4]]];
+    else
+      rw_choices := null;
+    end if;
     insert into public.quiz_pool (topic, difficulty, question_en, choices_en, explanation_en,
-                                  question_rw, choices_rw, explanation_rw, answer, fingerprint)
-    values (topic, diff, q ->> 'question', choices, left(coalesce(q ->> 'explanation', ''), 300),
+                                  question_rw, choices_rw, explanation_rw, answer, source, fingerprint)
+    values (topic, diff, q ->> 'question', choices, left(coalesce(q ->> 'explanation', ''), 400),
             case when rw is not null then rw[(k - 1) * 6 + 1] end,
-            case when rw is not null then rw[(k - 1) * 6 + 2 : (k - 1) * 6 + 5] end,
+            rw_choices,
             case when rw is not null then rw[(k - 1) * 6 + 6] end,
-            (q ->> 'correct_index')::integer, public._quiz_fingerprint(q ->> 'question'))
+            new_answer, 'ai-practical', public._quiz_fingerprint(q ->> 'question'))
     on conflict (fingerprint) do nothing;
     if found then saved := saved + 1; end if;
   end loop;
@@ -2147,6 +2207,10 @@ end $$;
 delete from public.point_events where reason = 'scan';
 update public.profiles p set points = greatest(0, coalesce((select sum(amount) from public.point_events e where e.user_id = p.id), 0))
 where p.points is distinct from greatest(0, coalesce((select sum(amount) from public.point_events e where e.user_id = p.id), 0));
+-- Quizzes are practical now: remove the first generation of exam-style questions (and any with numbers or years).
+delete from public.quiz_pool
+where source = 'ai'
+   or question_en ~ '[0-9]' or array_to_string(choices_en, ' ') ~ '[0-9]';
 -- The built-in admin account (created with the Auth admin API) is always an admin.
 update public.profiles set is_admin = true, full_name = 'EcoFun Admin'
 where id in (select id from auth.users where lower(email) = 'admin@ecofun.com') and not is_admin;

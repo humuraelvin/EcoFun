@@ -101,7 +101,7 @@
     "step1Hint": "Rwanda climate & environment news",
     "step1Done": "Story read",
     "step2": "Take a quiz",
-    "step2Hint": "10 environment questions · 2 pts per right answer",
+    "step2Hint": "10 everyday eco questions · 2 pts per right answer",
     "step2Done": "Scored {} of {}",
     "step3": "Climate mission",
     "step3Hint": "Do it, snap a photo, share your story · +{} pts",
@@ -149,7 +149,7 @@
     "questionOf": "Question {} of {}",
     "fromStory": "Written from your story",
     "preparing": "Preparing your quiz…",
-    "preparingBody": "Picking 10 environment questions for you…",
+    "preparingBody": "Picking 10 everyday eco questions for you…",
     "correct": "Correct!",
     "notQuite": "Not quite",
     "answerWas": "The answer is: {}",
@@ -171,7 +171,10 @@
       "other": "{} more quizzes today can earn points."
     },
     "noScoredLeft": "You used today's 3 scoring quizzes. Keep playing to learn!",
-    "playAgain": "Play another quiz"
+    "playAgain": "Play another quiz",
+    "rightAnswer": "The right answer",
+    "why": "Why",
+    "tip": "What you can do"
   },
   "mission": {
     "title": "Climate mission",
