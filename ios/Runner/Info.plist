@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Eco Step</string>
+	<string>EcoStep</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -47,9 +47,9 @@
 	<true/>
 	<!-- Camera and photo library permissions -->
 	<key>NSCameraUsageDescription</key>
-	<string>This app needs access to camera to take photos for climate missions.</string>
+	<string>EcoStep uses the camera to identify waste and to photograph your climate missions.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app needs access to photo library to select photos for climate missions.</string>
+	<string>EcoStep lets you choose a photo for waste identification, missions and community posts.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

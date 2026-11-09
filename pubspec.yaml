@@ -1,7 +1,7 @@
 name: eco_step
-description: "e-icon project"
+description: "EcoStep — small daily climate actions for Rwanda: local environment news, AI quizzes, AI waste identification and community missions."
 publish_to: 'none'
-version: 0.1.0
+version: 1.0.0+2
 
 environment:
   sdk: ^3.8.1
@@ -11,80 +11,46 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  flutter_dotenv: ^5.2.1
-  flutter_gen: ^5.11.0
-  flutter_launcher_icons: ^0.14.4
-  flutter_svg: ^2.2.0
-  get: ^4.7.2
-  get_it: ^8.0.3
-  injectable: ^2.5.0
-  json_serializable: ^6.10.0
-  rename: ^3.1.0
-  google_sign_in: ^6.2.1
-  easy_localization: ^3.0.8
-  image_picker: ^1.1.2
+
+  # Backend: auth, database, storage
+  supabase_flutter: ^2.18.3
+  google_sign_in: ^7.2.0
+
+  # State management + navigation
+  get: ^4.7.3
+
+  # Device
+  camera: ^0.12.2
+  image_picker: ^1.2.4
+  flutter_image_compress: ^2.5.1
   permission_handler: ^12.0.1
-  flutter_local_notifications: ^17.2.2
-  overlay_support: ^2.1.0
-  shared_preferences: ^2.3.2
-  firebase_core: ^4.0.0
-  firebase_auth: ^6.7.0
-  cloud_firestore: ^6.0.0
-  firebase_storage: ^13.0.0
-  cloud_functions: ^6.5.0
-  http: ^1.4.0
+  url_launcher: ^6.3.3
+  shared_preferences: ^2.5.3
+
+  # UI
+  cached_network_image: ^3.4.1
+  cupertino_icons: ^1.0.8
+  flutter_svg: ^2.3.2
+
+  # Config + localisation
+  flutter_dotenv: ^6.0.1
+  easy_localization: ^3.0.8
   intl: ^0.20.2
-  xml: ^6.5.0
-  url_launcher: ^6.3.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
-  build_runner: ^2.6.0
-  freezed: ^3.2.0
-  flutter_gen_runner: ^5.11.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
   assets:
     - assets/icons/
-    - assets/images/
     - assets/config/.env
     - assets/translations/
   fonts:
-    - family: Pretendard
-      fonts:
-        - asset: assets/fonts/Pretendard-Thin.ttf
-          weight: 100
-        - asset: assets/fonts/Pretendard-ExtraLight.ttf
-          weight: 200
-        - asset: assets/fonts/Pretendard-Light.ttf
-          weight: 300
-        - asset: assets/fonts/Pretendard-Regular.ttf
-          weight: 400
-        - asset: assets/fonts/Pretendard-Medium.ttf
-          weight: 500
-        - asset: assets/fonts/Pretendard-SemiBold.ttf
-          weight: 600
-        - asset: assets/fonts/Pretendard-Bold.ttf
-          weight: 700
-        - asset: assets/fonts/Pretendard-ExtraBold.ttf
-          weight: 800
-        - asset: assets/fonts/Pretendard-Black.ttf
-          weight: 900
     - family: ClimateCrisis
       fonts:
         - asset: assets/fonts/ClimateCrisis-Regular-VariableFont_YEAR.ttf
           weight: 400
-
-flutter_icons:
-  android: true
-  ios: true
-  image_path: "assets/images/app_icon.png"
-  remove_alpha_ios: true
-
-flutter_gen:
-  output: lib/gen/
-  integrations:
-    flutter_svg: true
