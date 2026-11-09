@@ -153,6 +153,11 @@ class ScanRow extends StatelessWidget {
               ]),
             ]),
           ),
+          if (scan.disposed)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Icon(CupertinoIcons.checkmark_seal_fill, size: 20, color: c.bio),
+            ),
           Icon(CupertinoIcons.chevron_right, size: 16, color: c.tertiaryLabel),
         ]),
       ),

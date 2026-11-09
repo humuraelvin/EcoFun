@@ -71,7 +71,7 @@ class _ComposeViewState extends State<ComposeView> {
         title: Text('community.newPost'.tr()),
       ),
       body: ListView(
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
         padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.paddingOf(context).bottom + 24),
         children: [
           Pressable(

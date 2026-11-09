@@ -134,16 +134,6 @@ class _MissionViewState extends State<MissionView> {
             onAction: () => Get.offNamed(Routes.history),
           );
         }
-        if (!p.quizDone) {
-          return MessageView(
-            icon: CupertinoIcons.lock_fill,
-            iconColor: c.secondaryLabel,
-            title: 'mission.lockedTitle'.tr(),
-            message: p.newsRead ? 'mission.lockedQuiz'.tr() : 'mission.lockedRead'.tr(),
-            actionLabel: p.newsRead ? 'news.takeQuiz'.tr() : null,
-            onAction: p.newsRead ? () => Get.offNamed(Routes.quiz) : null,
-          );
-        }
         return _form(c, m, session.language.value);
       }),
     );
@@ -151,7 +141,7 @@ class _MissionViewState extends State<MissionView> {
 
   Widget _form(AppColors c, Mission m, String lang) {
     return ListView(
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
       padding: EdgeInsets.fromLTRB(16, 4, 16, MediaQuery.paddingOf(context).bottom + 24),
       children: [
         AppCard(

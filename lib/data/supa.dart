@@ -34,7 +34,35 @@ const _serverMessageKeys = {
   "You reached today's scan limit. Come back tomorrow!": 'errors.scanLimit',
   'You can share up to 10 photos a day.': 'errors.postLimit',
   'This story is no longer available.': 'errors.storyGone',
+  'Your account has been suspended.': 'errors.suspended',
+  'New quiz questions are being prepared. Please try again in a minute.': 'errors.quizPreparing',
+  'This quiz is no longer available. Start a new one.': 'errors.quizGone',
+  'This quiz is no longer available.': 'errors.quizGone',
+  'Choose one of the four answers.': 'errors.chooseAnswer',
+  'This scan is no longer available.': 'errors.scanGone',
+  'Scan a clear waste item first.': 'errors.scanUnclear',
+  'The AI could not check this photo right now. Please try again.': 'errors.aiBusy',
+  'Write a comment (up to 500 characters).': 'errors.commentLength',
+  'You are commenting very fast. Take a short break.': 'errors.commentFast',
+  'You can only delete your own comments.': 'errors.notYours',
+  'Admins cannot be suspended.': 'errors.adminProtected',
+  'Admins cannot be deleted here.': 'errors.adminProtected',
+  'This member no longer exists.': 'errors.memberGone',
+  'Points must be between -1000 and 1000.': 'errors.pointsRange',
+  'Add a short reason.': 'errors.reason',
+  'Write a title and a message.': 'errors.announceEmpty',
+  'Translation is not available right now. Try again.': 'errors.translate',
+  'Write a short story (up to 1,000 characters).': 'errors.storyLength',
+  'Add a photo of your action.': 'errors.addPhoto',
+  'Upload a photo first.': 'errors.addPhoto',
+  'Choose 1 to 5 stars.': 'errors.generic',
 };
+
+/// True when the server or auth says this account is suspended.
+bool isSuspendedError(Object error) {
+  final m = (error is PostgrestException ? error.message : error is AuthException ? error.message : '$error').toLowerCase();
+  return m.contains('suspended') || m.contains('banned');
+}
 
 /// Turns any thrown error into a short, human sentence in the current language.
 String friendlyError(Object error) {
@@ -43,6 +71,7 @@ String friendlyError(Object error) {
   }
   if (error is AuthException) {
     final m = error.message.toLowerCase();
+    if (m.contains('banned') || m.contains('suspended')) return 'errors.suspended'.tr();
     if (m.contains('invalid login') || m.contains('invalid credentials')) return 'errors.badLogin'.tr();
     if (m.contains('email not confirmed')) return 'errors.emailNotConfirmed'.tr();
     if (m.contains('already registered') || m.contains('already exists')) return 'errors.emailTaken'.tr();

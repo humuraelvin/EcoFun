@@ -80,11 +80,10 @@ class _NewsDetailViewState extends State<NewsDetailView> {
     NewsController.to.markLocallyRead(_article.id);
     final session = SessionController.to;
     final firstToday = !session.progress.newsRead;
-    final quizStarted = session.progress.quizDone;
     final ok = await session.markRead(_article);
     if (!mounted) return;
     setState(() {});
-    if (ok && firstToday && !quizStarted) {
+    if (ok && firstToday) {
       HapticFeedback.mediumImpact();
       showToast('news.readUnlocked'.tr(), title: 'news.readTitle'.tr(), icon: CupertinoIcons.book_fill);
     } else if (!ok) {
@@ -227,6 +226,7 @@ class _NewsDetailViewState extends State<NewsDetailView> {
   }
 }
 
+/// Optional: after a story, members can test themselves with an environment quiz.
 class _QuizCallout extends StatelessWidget {
   const _QuizCallout({required this.marked});
   final bool marked;
@@ -234,36 +234,29 @@ class _QuizCallout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Obx(() {
-      final p = SessionController.to.progress;
-      if (p.quizDone) return const SizedBox.shrink();
-      final ready = p.newsRead || marked;
-      return AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: ready ? c.brandSoft : c.fill, borderRadius: BorderRadius.circular(18)),
-        child: Row(
-          children: [
-            Icon(ready ? CupertinoIcons.sparkles : CupertinoIcons.arrow_down_circle, color: ready ? c.brand : c.secondaryLabel),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                ready ? 'news.quizReady'.tr() : 'news.keepReading'.tr(),
-                style: AppText.subhead.c(ready ? c.label : c.secondaryLabel),
-              ),
-            ),
-            if (ready) ...[
-              const SizedBox(width: 8),
-              AppButton(
-                label: 'news.takeQuiz'.tr(),
-                expand: false,
-                height: 38,
-                onPressed: () => Get.toNamed(Routes.quiz),
-              ),
-            ],
-          ],
-        ),
-      );
-    });
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: c.brandSoft, borderRadius: BorderRadius.circular(18)),
+      child: Row(
+        children: [
+          Icon(CupertinoIcons.question_circle_fill, color: c.brand, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('news.quizTitle'.tr(), style: AppText.headline.c(c.label)),
+              const SizedBox(height: 2),
+              Text('news.quizOptional'.tr(), style: AppText.footnote.c(c.secondaryLabel)),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          AppButton(
+            label: 'news.takeQuiz'.tr(),
+            expand: false,
+            height: 38,
+            onPressed: () => Get.toNamed(Routes.quiz),
+          ),
+        ],
+      ),
+    );
   }
 }

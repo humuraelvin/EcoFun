@@ -130,6 +130,24 @@ abstract final class ScanRepository {
     return WasteScan.fromJson(_map(results[0]));
   }
 
+  /// Proof photo of the item going into the right bin: AI checks it and awards points.
+  static Future<DisposalResult> confirmDisposal(String scanId, Uint8List jpeg, String language) async {
+    final path = StorageService.instance.newPath();
+    final upload = StorageService.instance
+        .uploadJpeg(Bucket.scans, jpeg, path: path)
+        .then<bool>((_) => true)
+        .catchError((_) => false);
+    final check = rpc<dynamic>('confirm_disposal', {
+      'p_scan_id': scanId,
+      'p_image_base64': base64Encode(jpeg),
+      'p_mime': 'image/jpeg',
+      'p_image_path': path,
+      'p_language': language,
+    });
+    final results = await Future.wait<dynamic>([check, upload]);
+    return DisposalResult.fromJson(_map(results[0]));
+  }
+
   static Future<List<WasteScan>> mine({int limit = 60}) async {
     final rows = await supa
         .from('waste_scans')
@@ -200,14 +218,23 @@ abstract final class CommunityRepository {
     await supa.from('community_posts').delete().eq('id', postId);
   }
 
-  static Future<List<Profile>> leaderboard() async {
-    final rows = await supa
-        .from('profiles')
-        .select('id,full_name,avatar_url,points')
-        .order('points', ascending: false)
-        .order('created_at')
-        .limit(100);
-    return (rows as List).map((e) => Profile.fromJson(_map(e))).toList();
+  static Future<Leaderboard> leaderboard() async =>
+      Leaderboard.fromJson(_map(await rpc<dynamic>('get_leaderboard', {'p_limit': 100})));
+
+  static Future<CommunityPost> post(String id) async =>
+      CommunityPost.fromJson(_map(await rpc<dynamic>('get_post', {'p_post_id': id})));
+
+  static Future<List<PostComment>> comments(String postId) async {
+    final json = await rpc<dynamic>('get_comments', {'p_post_id': postId});
+    return (json as List).map((e) => PostComment.fromJson(_map(e))).toList();
+  }
+
+  static Future<void> addComment(String postId, String body) async {
+    await rpc<dynamic>('add_comment', {'p_post_id': postId, 'p_body': body});
+  }
+
+  static Future<void> deleteComment(String commentId) async {
+    await rpc<dynamic>('delete_comment', {'p_comment_id': commentId});
   }
 
   static Future<Profile?> member(String uid) async {
@@ -215,9 +242,94 @@ abstract final class CommunityRepository {
     return row == null ? null : Profile.fromJson(row);
   }
 
-  static Future<String> grantPoints(String email, int points, String reason) async {
-    final j = _map(await rpc<dynamic>('admin_grant_points', {'p_email': email, 'p_points': points, 'p_reason': reason}));
-    return (j['member'] as String?) ?? email;
+}
+
+class NotificationPage {
+  const NotificationPage(this.items, this.unread);
+  final List<AppNotification> items;
+  final int unread;
+}
+
+abstract final class NotificationRepository {
+  static Future<NotificationPage> list({DateTime? before}) async {
+    final j = _map(await rpc<dynamic>('get_notifications', {
+      'p_limit': 40,
+      'p_before': before?.toUtc().toIso8601String(),
+    }));
+    final items = ((j['items'] as List?) ?? const []).map((e) => AppNotification.fromJson(_map(e))).toList();
+    return NotificationPage(items, (j['unread'] as num?)?.toInt() ?? 0);
+  }
+
+  /// Marks [ids] (or everything) as read and returns the new unread count.
+  static Future<int> markRead([List<int>? ids]) async =>
+      ((await rpc<dynamic>('mark_notifications_read', {'p_ids': ids})) as num?)?.toInt() ?? 0;
+
+  static Future<void> clear() async => rpc<dynamic>('clear_notifications');
+}
+
+abstract final class AdminRepository {
+  static Future<AdminDashboard> dashboard() async => AdminDashboard.fromJson(_map(await rpc<dynamic>('admin_dashboard')));
+
+  static Future<List<AdminUser>> users({String search = '', String filter = 'all', int offset = 0}) async {
+    final json = await rpc<dynamic>('admin_users', {'p_search': search, 'p_filter': filter, 'p_limit': 30, 'p_offset': offset});
+    return (json as List).map((e) => AdminUser.fromJson(_map(e))).toList();
+  }
+
+  static Future<AdminUserDetail> user(String id) async =>
+      AdminUserDetail.fromJson(_map(await rpc<dynamic>('admin_user_detail', {'p_user': id})));
+
+  static Future<void> setSuspended(String id, bool suspended, String reason) async {
+    await rpc<dynamic>('admin_set_suspended', {'p_user': id, 'p_suspended': suspended, 'p_reason': reason});
+  }
+
+  /// Deletes the member's files first (admins may remove any file), then the account.
+  static Future<void> deleteUser(String id) async {
+    await StorageService.instance.deleteAllOf(id);
+    await rpc<dynamic>('admin_delete_user', {'p_user': id});
+  }
+
+  static Future<int> adjustPoints(String id, int points, String reason) async =>
+      ((await rpc<dynamic>('admin_adjust_points', {'p_user': id, 'p_points': points, 'p_reason': reason})) as num).toInt();
+
+  static Future<List<CommunityPost>> posts({DateTime? before}) async {
+    final json = await rpc<dynamic>('admin_posts', {'p_limit': 20, 'p_before': before?.toUtc().toIso8601String()});
+    return (json as List).map((e) => CommunityPost.fromJson(_map(e))).toList();
+  }
+
+  static Future<void> deletePost(CommunityPost post, String reason) async {
+    await rpc<dynamic>('admin_delete_post', {'p_post_id': post.id, 'p_reason': reason});
+    try {
+      await supa.storage.from(Bucket.community.name).remove([post.imagePath]);
+    } catch (_) {}
+  }
+
+  static Future<String> translate(String text, String from, String to) async =>
+      (await rpc<dynamic>('admin_translate', {'p_text': text, 'p_from': from, 'p_to': to})) as String? ?? '';
+
+  static Future<int> announce({
+    required String titleEn,
+    required String bodyEn,
+    required String titleRw,
+    required String bodyRw,
+    required bool email,
+  }) async {
+    final j = _map(await rpc<dynamic>('admin_post_announcement', {
+      'p_title_en': titleEn,
+      'p_body_en': bodyEn,
+      'p_title_rw': titleRw,
+      'p_body_rw': bodyRw,
+      'p_send_email': email,
+    }));
+    return (j['recipients'] as num?)?.toInt() ?? 0;
+  }
+
+  static Future<List<Announcement>> announcements() async {
+    final json = await rpc<dynamic>('admin_announcements', {'p_limit': 30});
+    return (json as List).map((e) => Announcement.fromJson(_map(e))).toList();
+  }
+
+  static Future<void> deleteAnnouncement(String id) async {
+    await rpc<dynamic>('admin_delete_announcement', {'p_id': id});
   }
 }
 

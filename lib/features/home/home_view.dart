@@ -18,6 +18,7 @@ import '../../core/widgets/states.dart';
 import '../../core/widgets/toast.dart';
 import '../../data/models.dart';
 import '../news/news_widgets.dart';
+import '../notifications/notifications_view.dart';
 import '../shell/shell_view.dart';
 
 class HomeView extends StatelessWidget {
@@ -32,7 +33,11 @@ class HomeView extends StatelessWidget {
       title: 'tabs.today'.tr(),
       controller: ShellController.to.scrollers[0],
       onRefresh: () => Future.wait([session.refreshHome(), news.refreshNews()]),
-      trailing: Obx(() => _StreakBadge(streak: session.home.value?.streak ?? 0)),
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        Obx(() => _StreakBadge(streak: session.home.value?.streak ?? 0)),
+        const SizedBox(width: 6),
+        const NotificationBell(),
+      ]),
       slivers: [
         SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -302,11 +307,9 @@ class _TodaySteps extends StatelessWidget {
             icon: CupertinoIcons.question_circle_fill,
             title: 'home.step2'.tr(),
             subtitle: p.quizDone
-                ? 'home.step2Done'.tr(args: ['${p.quizScore ?? 0}', '${p.quizTotal ?? 5}'])
-                : p.newsRead
-                    ? 'home.step2Hint'.tr()
-                    : 'home.lockedAfterRead'.tr(),
-            state: p.quizDone ? _StepState.done : (p.newsRead ? _StepState.ready : _StepState.locked),
+                ? 'home.step2Done'.tr(args: ['${p.quizScore ?? 0}', '${p.quizTotal ?? 10}'])
+                : 'home.step2Hint'.tr(),
+            state: p.quizDone ? _StepState.done : _StepState.ready,
             onTap: () => Get.toNamed(Routes.quiz),
           ),
           _StepRow(
@@ -316,10 +319,8 @@ class _TodaySteps extends StatelessWidget {
             title: home.mission?.title(lang) ?? 'home.step3'.tr(),
             subtitle: p.missionDone
                 ? 'home.step3Done'.tr()
-                : p.quizDone
-                    ? 'home.step3Hint'.tr(args: ['${home.mission?.points ?? 20}'])
-                    : 'home.lockedAfterQuiz'.tr(),
-            state: p.missionDone ? _StepState.done : (p.quizDone ? _StepState.ready : _StepState.locked),
+                : 'home.step3Hint'.tr(args: ['${home.mission?.points ?? 20}']),
+            state: p.missionDone ? _StepState.done : _StepState.ready,
             onTap: () => Get.toNamed(Routes.mission),
             last: true,
           ),
@@ -361,7 +362,7 @@ class _StepRow extends StatelessWidget {
       scale: 0.985,
       onTap: locked
           ? () => showToast(subtitle, icon: CupertinoIcons.lock_fill)
-          : done && index != 1
+          : done && index == 3   // stories and quizzes can be repeated; the mission is once a day
               ? () => showToast('home.alreadyDone'.tr())
               : onTap,
       child: Container(

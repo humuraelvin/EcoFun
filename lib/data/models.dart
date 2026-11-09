@@ -120,6 +120,7 @@ class HomeData {
     required this.progress,
     required this.mission,
     required this.stats,
+    this.unreadNotifications = 0,
   });
 
   final DateTime today;
@@ -129,6 +130,18 @@ class HomeData {
   final DayProgress progress;
   final Mission? mission;
   final Stats stats;
+  final int unreadNotifications;
+
+  HomeData copyWith({Profile? profile, int? unreadNotifications}) => HomeData(
+        today: today,
+        profile: profile ?? this.profile,
+        streak: streak,
+        week: week,
+        progress: progress,
+        mission: mission,
+        stats: stats,
+        unreadNotifications: unreadNotifications ?? this.unreadNotifications,
+      );
 
   factory HomeData.fromJson(Map<String, dynamic> j) => HomeData(
         today: DateTime.parse(j['today'] as String),
@@ -140,6 +153,7 @@ class HomeData {
         progress: DayProgress.fromJson(Map<String, dynamic>.from((j['progress'] as Map?) ?? const {})),
         mission: j['mission'] == null ? null : Mission.fromJson(Map<String, dynamic>.from(j['mission'] as Map)),
         stats: Stats.fromJson((j['stats'] as Map?)?.cast<String, dynamic>()),
+        unreadNotifications: _int(j['unread_notifications']),
       );
 }
 
@@ -234,29 +248,44 @@ class QuizAnswer {
 }
 
 class QuizQuestion {
-  QuizQuestion({required this.position, required this.question, required this.options, this.answer});
+  QuizQuestion({required this.position, required this.question, required this.options, this.topic = '', this.answer});
   final int position;
   final String question;
   final List<String> options;
+  final String topic;
   QuizAnswer? answer;
 
   factory QuizQuestion.fromJson(Map<String, dynamic> j) => QuizQuestion(
         position: _int(j['position']),
         question: j['question'] as String,
         options: (j['options'] as List).map((e) => e.toString()).toList(),
+        topic: (j['topic'] as String?) ?? '',
         answer: j['answer'] == null ? null : QuizAnswer.fromJson(Map<String, dynamic>.from(j['answer'] as Map)),
       );
 }
 
 class Quiz {
-  const Quiz({required this.id, required this.source, required this.questions});
+  const Quiz({
+    required this.id,
+    required this.questions,
+    this.countsForPoints = true,
+    this.scoredToday = 0,
+    this.scoredLimit = 3,
+    this.pointsPerCorrect = 2,
+  });
   final String id;
-  final String source;
   final List<QuizQuestion> questions;
+  final bool countsForPoints;
+  final int scoredToday;
+  final int scoredLimit;
+  final int pointsPerCorrect;
 
   factory Quiz.fromJson(Map<String, dynamic> j) => Quiz(
         id: j['quiz_id'] as String,
-        source: (j['source'] as String?) ?? 'bank',
+        countsForPoints: j['counts_for_points'] != false,
+        scoredToday: _int(j['scored_today']),
+        scoredLimit: j['scored_limit'] == null ? 3 : _int(j['scored_limit']),
+        pointsPerCorrect: j['points_per_correct'] == null ? 2 : _int(j['points_per_correct']),
         questions: ((j['questions'] as List?) ?? const [])
             .map((e) => QuizQuestion.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(),
@@ -264,17 +293,25 @@ class Quiz {
 }
 
 class QuizResult {
-  const QuizResult({required this.score, required this.total, required this.pointsAwarded, required this.alreadyCompleted});
+  const QuizResult({
+    required this.score,
+    required this.total,
+    required this.pointsAwarded,
+    required this.alreadyCompleted,
+    this.scoredLeft = 0,
+  });
   final int score;
   final int total;
   final int pointsAwarded;
   final bool alreadyCompleted;
+  final int scoredLeft;
 
   factory QuizResult.fromJson(Map<String, dynamic> j) => QuizResult(
         score: _int(j['score']),
         total: _int(j['total']),
         pointsAwarded: _int(j['points_awarded']),
         alreadyCompleted: j['already_completed'] == true,
+        scoredLeft: _int(j['scored_left']),
       );
 }
 
@@ -305,6 +342,9 @@ class WasteScan {
     required this.recyclable,
     required this.createdAt,
     this.pointsAwarded = 0,
+    this.disposedAt,
+    this.disposalPoints = 0,
+    this.disposalFeedback = '',
   });
 
   final String id;
@@ -320,9 +360,34 @@ class WasteScan {
   final bool recyclable;
   final DateTime createdAt;
   final int pointsAwarded;
+  final DateTime? disposedAt;
+  final int disposalPoints;
+  final String disposalFeedback;
 
-  static const columns =
-      'id,image_path,category,item,material,confidence,reason,decompose_time,disposal,tip,recyclable,created_at';
+  bool get disposed => disposedAt != null;
+  bool get canDispose => !disposed && category != WasteCategory.uncertain;
+
+  WasteScan markDisposed({required int points, required String feedback}) => WasteScan(
+        id: id,
+        imagePath: imagePath,
+        category: category,
+        item: item,
+        material: material,
+        confidence: confidence,
+        reason: reason,
+        decomposeTime: decomposeTime,
+        disposal: disposal,
+        tip: tip,
+        recyclable: recyclable,
+        createdAt: createdAt,
+        pointsAwarded: pointsAwarded,
+        disposedAt: DateTime.now(),
+        disposalPoints: points,
+        disposalFeedback: feedback,
+      );
+
+  static const columns = 'id,image_path,category,item,material,confidence,reason,decompose_time,disposal,tip,'
+      'recyclable,created_at,disposed_at,disposal_points,disposal_feedback';
 
   factory WasteScan.fromJson(Map<String, dynamic> j) => WasteScan(
         id: j['id'] as String,
@@ -338,6 +403,24 @@ class WasteScan {
         recyclable: j['recyclable'] == true,
         createdAt: _date(j['created_at']),
         pointsAwarded: _int(j['points_awarded']),
+        disposedAt: j['disposed_at'] == null ? null : _date(j['disposed_at']),
+        disposalPoints: _int(j['disposal_points']),
+        disposalFeedback: (j['disposal_feedback'] as String?) ?? '',
+      );
+}
+
+class DisposalResult {
+  const DisposalResult({required this.disposed, required this.points, required this.feedback, this.already = false});
+  final bool disposed;
+  final int points;
+  final String feedback;
+  final bool already;
+
+  factory DisposalResult.fromJson(Map<String, dynamic> j) => DisposalResult(
+        disposed: j['disposed'] == true,
+        points: _int(j['points_awarded']),
+        feedback: (j['feedback'] as String?) ?? '',
+        already: j['already'] == true,
       );
 }
 
@@ -389,6 +472,9 @@ class CommunityPost {
     required this.authorName,
     this.authorAvatar,
     this.myRating,
+    this.commentCount = 0,
+    this.authorEmail,
+    this.authorSuspended = false,
   });
 
   final String id;
@@ -401,6 +487,9 @@ class CommunityPost {
   final String authorName;
   final String? authorAvatar;
   int? myRating;
+  int commentCount;
+  final String? authorEmail;
+  final bool authorSuspended;
 
   double get average => ratingCount == 0 ? 0 : ratingTotal / ratingCount;
 
@@ -415,5 +504,240 @@ class CommunityPost {
         authorName: (j['author_name'] as String?) ?? 'EcoFun member',
         authorAvatar: j['author_avatar'] as String?,
         myRating: j['my_rating'] == null ? null : _int(j['my_rating']),
+        commentCount: _int(j['comment_count']),
+        authorEmail: j['author_email'] as String?,
+        authorSuspended: j['author_suspended'] == true,
+      );
+}
+
+class PostComment {
+  const PostComment({
+    required this.id,
+    required this.postId,
+    required this.userId,
+    required this.body,
+    required this.createdAt,
+    required this.authorName,
+    this.authorAvatar,
+  });
+
+  final String id;
+  final String postId;
+  final String userId;
+  final String body;
+  final DateTime createdAt;
+  final String authorName;
+  final String? authorAvatar;
+
+  factory PostComment.fromJson(Map<String, dynamic> j) => PostComment(
+        id: j['id'] as String,
+        postId: j['post_id'] as String,
+        userId: j['user_id'] as String,
+        body: (j['body'] as String?) ?? '',
+        createdAt: _date(j['created_at']),
+        authorName: (j['author_name'] as String?) ?? 'EcoFun member',
+        authorAvatar: j['author_avatar'] as String?,
+      );
+}
+
+class LeaderEntry {
+  const LeaderEntry({required this.profile, required this.rank});
+  final Profile profile;
+  final int rank;
+}
+
+class Leaderboard {
+  const Leaderboard({required this.leaders, this.myRank, this.members = 0});
+  final List<LeaderEntry> leaders;
+  final int? myRank;
+  final int members;
+
+  factory Leaderboard.fromJson(Map<String, dynamic> j) => Leaderboard(
+        leaders: ((j['leaders'] as List?) ?? const [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .map((e) => LeaderEntry(profile: Profile.fromJson(e), rank: _int(e['rank'])))
+            .toList(),
+        myRank: j['my_rank'] == null ? null : _int(j['my_rank']),
+        members: _int(j['members']),
+      );
+}
+
+/// One entry on the notifications page. The text is built in the app from [kind] + [data],
+/// so it always follows the app language.
+class AppNotification {
+  AppNotification({
+    required this.id,
+    required this.kind,
+    required this.data,
+    required this.read,
+    required this.createdAt,
+    this.postId,
+    this.postImage,
+    this.actorId,
+    this.actorName,
+    this.actorAvatar,
+  });
+
+  final int id;
+  final String kind;
+  final Map<String, dynamic> data;
+  bool read;
+  final DateTime createdAt;
+  final String? postId;
+  final String? postImage;
+  final String? actorId;
+  final String? actorName;
+  final String? actorAvatar;
+
+  factory AppNotification.fromJson(Map<String, dynamic> j) => AppNotification(
+        id: _int(j['id']),
+        kind: (j['kind'] as String?) ?? '',
+        data: Map<String, dynamic>.from((j['data'] as Map?) ?? const {}),
+        read: j['read'] == true || j['read_at'] != null,
+        createdAt: _date(j['created_at']),
+        postId: j['post_id'] as String?,
+        postImage: j['post_image'] as String?,
+        actorId: j['actor_id'] as String?,
+        actorName: j['actor_name'] as String?,
+        actorAvatar: j['actor_avatar'] as String?,
+      );
+}
+
+class Announcement {
+  const Announcement({
+    required this.id,
+    required this.titleEn,
+    required this.bodyEn,
+    required this.titleRw,
+    required this.bodyRw,
+    required this.recipients,
+    required this.emailed,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String titleEn;
+  final String bodyEn;
+  final String titleRw;
+  final String bodyRw;
+  final int recipients;
+  final bool emailed;
+  final DateTime createdAt;
+
+  String title(String lang) => lang == 'rw' && titleRw.isNotEmpty ? titleRw : titleEn;
+  String body(String lang) => lang == 'rw' && bodyRw.isNotEmpty ? bodyRw : bodyEn;
+
+  factory Announcement.fromJson(Map<String, dynamic> j) => Announcement(
+        id: j['id'] as String,
+        titleEn: (j['title_en'] as String?) ?? '',
+        bodyEn: (j['body_en'] as String?) ?? '',
+        titleRw: (j['title_rw'] as String?) ?? '',
+        bodyRw: (j['body_rw'] as String?) ?? '',
+        recipients: _int(j['recipients']),
+        emailed: j['emailed'] == true,
+        createdAt: _date(j['created_at']),
+      );
+}
+
+class AdminUser {
+  const AdminUser({
+    required this.id,
+    required this.fullName,
+    required this.email,
+    required this.points,
+    required this.createdAt,
+    this.avatarUrl,
+    this.isAdmin = false,
+    this.suspended = false,
+    this.lastSeen,
+  });
+
+  final String id;
+  final String fullName;
+  final String email;
+  final int points;
+  final DateTime createdAt;
+  final String? avatarUrl;
+  final bool isAdmin;
+  final bool suspended;
+  final DateTime? lastSeen;
+
+  factory AdminUser.fromJson(Map<String, dynamic> j) => AdminUser(
+        id: j['id'] as String,
+        fullName: (j['full_name'] as String?) ?? 'EcoFun member',
+        email: (j['email'] as String?) ?? '',
+        points: _int(j['points']),
+        createdAt: _date(j['created_at']),
+        avatarUrl: j['avatar_url'] as String?,
+        isAdmin: j['is_admin'] == true,
+        suspended: j['suspended'] == true,
+        lastSeen: j['last_seen'] == null ? null : _date(j['last_seen']),
+      );
+}
+
+class PointEvent {
+  const PointEvent({required this.amount, required this.reason, required this.note, required this.createdAt});
+  final int amount;
+  final String reason;
+  final String note;
+  final DateTime createdAt;
+
+  factory PointEvent.fromJson(Map<String, dynamic> j) => PointEvent(
+        amount: _int(j['amount']),
+        reason: (j['reason'] as String?) ?? '',
+        note: (j['note'] as String?) ?? '',
+        createdAt: _date(j['created_at']),
+      );
+}
+
+class AdminUserDetail {
+  const AdminUserDetail({
+    required this.user,
+    required this.stats,
+    required this.points,
+    required this.posts,
+    this.suspendedReason,
+    this.verifiedAt,
+  });
+
+  final AdminUser user;
+  final Map<String, int> stats;
+  final List<PointEvent> points;
+  final List<CommunityPost> posts;
+  final String? suspendedReason;
+  final DateTime? verifiedAt;
+
+  factory AdminUserDetail.fromJson(Map<String, dynamic> j) {
+    final p = Map<String, dynamic>.from(j['profile'] as Map);
+    return AdminUserDetail(
+      user: AdminUser.fromJson(p),
+      stats: Map<String, dynamic>.from((j['stats'] as Map?) ?? const {}).map((k, v) => MapEntry(k, _int(v))),
+      points: ((j['points'] as List?) ?? const []).map((e) => PointEvent.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      posts: ((j['posts'] as List?) ?? const []).map((e) => CommunityPost.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+      suspendedReason: p['suspended_reason'] as String?,
+      verifiedAt: p['verified_at'] == null ? null : _date(p['verified_at']),
+    );
+  }
+}
+
+class AdminDashboard {
+  const AdminDashboard({required this.counts, required this.signups, required this.top, required this.recent});
+  final Map<String, int> counts;
+  final List<(DateTime, int)> signups;
+  final List<Profile> top;
+  final List<AdminUser> recent;
+
+  int operator [](String key) => counts[key] ?? 0;
+
+  factory AdminDashboard.fromJson(Map<String, dynamic> j) => AdminDashboard(
+        counts: {
+          for (final e in j.entries)
+            if (e.value is num) e.key: (e.value as num).toInt(),
+        },
+        signups: ((j['signups'] as List?) ?? const [])
+            .map((e) => (DateTime.parse(e['day'] as String), _int(e['count'])))
+            .toList(),
+        top: ((j['top'] as List?) ?? const []).map((e) => Profile.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+        recent: ((j['recent'] as List?) ?? const []).map((e) => AdminUser.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
       );
 }

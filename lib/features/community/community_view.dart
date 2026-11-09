@@ -10,7 +10,6 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/utils/format.dart';
 import '../../core/widgets/buttons.dart';
-import '../../core/widgets/cards.dart';
 import '../../core/widgets/large_title_page.dart';
 import '../../core/widgets/photos.dart';
 import '../../core/widgets/pressable.dart';
@@ -27,7 +26,7 @@ class CommunityController extends GetxController {
 
   final tab = 0.obs; // 0 feed, 1 leaderboard
   final posts = <CommunityPost>[].obs;
-  final leaders = <Profile>[].obs;
+  final board = Rxn<Leaderboard>();
   final loadingFeed = true.obs;
   final loadingMore = false.obs;
   final hasMore = true.obs;
@@ -40,6 +39,15 @@ class CommunityController extends GetxController {
     super.onInit();
     refreshFeed();
     refreshLeaders();
+    // Points change all the time: reload the leaderboard whenever it is shown.
+    ever<int>(tab, (t) {
+      if (t == 1) refreshLeaders();
+    });
+    if (Get.isRegistered<ShellController>()) {
+      ever<int>(ShellController.to.index, (i) {
+        if (i == 3 && tab.value == 1) refreshLeaders();
+      });
+    }
   }
 
   Future<void> refreshAll() => Future.wait([refreshFeed(), refreshLeaders()]);
@@ -72,7 +80,7 @@ class CommunityController extends GetxController {
 
   Future<void> refreshLeaders() async {
     try {
-      leaders.assignAll(await CommunityRepository.leaderboard());
+      board.value = await CommunityRepository.leaderboard();
       leadersError.value = null;
     } catch (e) {
       leadersError.value = friendlyError(e);
@@ -96,6 +104,7 @@ class CommunityController extends GetxController {
         ..ratingTotal = total;
       if (already) showToast('community.alreadyRated'.tr());
       posts.refresh();
+      refreshLeaders();
     } catch (e) {
       post
         ..myRating = before.$1
@@ -179,23 +188,6 @@ class _CommunityViewState extends State<CommunityView> {
                 )),
           ),
         ),
-        Obx(() {
-          final isAdmin = SessionController.to.profile?.isAdmin ?? false;
-          if (!isAdmin) return const SliverToBoxAdapter(child: SizedBox.shrink());
-          return SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-            sliver: SliverToBoxAdapter(
-              child: GroupedSection(children: [
-                GroupedRow(
-                  icon: CupertinoIcons.shield_lefthalf_fill,
-                  iconColor: const Color(0xFF8E5CF7),
-                  title: 'admin.portal'.tr(),
-                  onTap: () => Get.toNamed(Routes.admin),
-                ),
-              ]),
-            ),
-          );
-        }),
         Obx(() => ctrl.tab.value == 0 ? _feed(c) : _leaderboard(c)),
       ],
     );
@@ -250,7 +242,8 @@ class _CommunityViewState extends State<CommunityView> {
   }
 
   Widget _leaderboard(AppColors c) {
-    final list = ctrl.leaders.toList();
+    final board = ctrl.board.value;
+    final list = board?.leaders ?? const <LeaderEntry>[];
     if (list.isEmpty) {
       if (ctrl.loadingLeaders.value) return const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.all(40), child: CupertinoActivityIndicator()));
       return SliverFillRemaining(
@@ -261,16 +254,16 @@ class _CommunityViewState extends State<CommunityView> {
       );
     }
     final me = SessionController.to.profile?.id;
-    final myRank = list.indexWhere((p) => p.id == me);
+    final myRank = board?.myRank;
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       sliver: SliverList.list(children: [
-        if (list.length >= 3) _Podium(top: list.take(3).toList()),
-        if (myRank >= 0)
+        if (list.length >= 3) _Podium(top: list.take(3).map((e) => e.profile).toList()),
+        if (myRank != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Text(
-              'community.yourRank'.tr(args: ['${myRank + 1}', '${list.length}']),
+              'community.yourRank'.tr(args: ['$myRank', '${board?.members ?? list.length}']),
               textAlign: TextAlign.center,
               style: AppText.footnote.c(c.secondaryLabel),
             ),
@@ -281,7 +274,7 @@ class _CommunityViewState extends State<CommunityView> {
             color: c.surface,
             child: Column(children: [
               for (var i = list.length >= 3 ? 3 : 0; i < list.length; i++)
-                _LeaderRow(rank: i + 1, profile: list[i], isMe: list[i].id == me, last: i == list.length - 1),
+                _LeaderRow(rank: list[i].rank, profile: list[i].profile, isMe: list[i].profile.id == me, last: i == list.length - 1),
             ]),
           ),
         ),
@@ -291,8 +284,17 @@ class _CommunityViewState extends State<CommunityView> {
 }
 
 class PostCard extends StatelessWidget {
-  const PostCard({super.key, required this.post});
+  const PostCard({super.key, required this.post, this.detail = false});
   final CommunityPost post;
+
+  /// True on the post page itself (no navigation, no rounded card margin).
+  final bool detail;
+
+  Future<void> openPost() async {
+    if (detail) return;
+    await Get.toNamed(Routes.post, arguments: post);
+    if (Get.isRegistered<CommunityController>()) CommunityController.to.posts.refresh();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -326,9 +328,13 @@ class PostCard extends StatelessWidget {
               ]),
             ),
           ),
-          AspectRatio(
-            aspectRatio: 1,
-            child: NetPhoto(url: StorageService.instance.publicUrl(Bucket.community, post.imagePath)),
+          Pressable(
+            onTap: openPost,
+            scale: 1,
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: NetPhoto(url: StorageService.instance.publicUrl(Bucket.community, post.imagePath)),
+            ),
           ),
           if (post.caption.isNotEmpty)
             Padding(
@@ -345,6 +351,15 @@ class PostCard extends StatelessWidget {
                     ? 'community.noRatings'.tr()
                     : '${post.average.toStringAsFixed(1)}  ·  ${'community.ratings'.plural(post.ratingCount)}',
                 style: AppText.footnote.semibold.c(c.secondaryLabel),
+              ),
+              const SizedBox(width: 12),
+              Pressable(
+                onTap: openPost,
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(CupertinoIcons.chat_bubble_fill, size: 15, color: c.secondaryLabel),
+                  const SizedBox(width: 4),
+                  Text('${post.commentCount}', style: AppText.footnote.semibold.c(c.secondaryLabel)),
+                ]),
               ),
               const Spacer(),
               if (!mine) _StarPicker(post: post),

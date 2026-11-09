@@ -85,13 +85,17 @@ class StorageService {
     } catch (_) {}
   }
 
-  Future<void> deleteAllMine() async {
-    final uid = currentUid;
+  Future<void> deleteAllMine() => deleteAllOf(currentUid);
+
+  /// Removes every file a member uploaded (their own, or any member's when called by an admin).
+  Future<void> deleteAllOf(String uid) async {
     for (final b in Bucket.values) {
       try {
-        final files = await supa.storage.from(b.name).list(path: uid);
-        if (files.isNotEmpty) {
+        while (true) {
+          final files = await supa.storage.from(b.name).list(path: uid, searchOptions: const SearchOptions(limit: 100));
+          if (files.isEmpty) break;
           await supa.storage.from(b.name).remove(files.map((f) => '$uid/${f.name}').toList());
+          if (files.length < 100) break;
         }
       } catch (_) {}
     }

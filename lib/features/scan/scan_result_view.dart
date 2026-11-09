@@ -14,9 +14,11 @@ import '../../core/theme/app_text.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/image_utils.dart';
 import '../../core/widgets/buttons.dart';
+import '../../core/widgets/cards.dart';
 import '../../core/widgets/large_title_page.dart';
 import '../../core/widgets/photos.dart';
 import '../../core/widgets/states.dart';
+import '../../core/widgets/toast.dart';
 import '../../data/models.dart';
 import '../../data/repositories.dart';
 import '../../data/storage_service.dart';
@@ -39,6 +41,8 @@ class _ScanResultViewState extends State<ScanResultView> {
   String? _error;
   int _tip = 0;
   Timer? _tipTimer;
+  bool _disposing = false;
+  String? _disposalFeedback; // AI feedback when the proof photo was not accepted
 
   static const _tips = ['scan.tip1', 'scan.tip2', 'scan.tip3', 'scan.tip4'];
 
@@ -73,6 +77,95 @@ class _ScanResultViewState extends State<ScanResultView> {
     } finally {
       _tipTimer?.cancel();
     }
+  }
+
+  /// Points come from disposing of the item properly: photograph it going into the right bin.
+  Future<void> _dispose() async {
+    final scan = _scan;
+    if (scan == null || _disposing) return;
+    final path = await Get.toNamed(Routes.camera, arguments: {'hint': 'scan.disposeHint'.tr()});
+    if (path is! String || !mounted) return;
+    setState(() {
+      _disposing = true;
+      _disposalFeedback = null;
+    });
+    try {
+      final bytes = await ImageUtils.compressForAi(path);
+      final r = await ScanRepository.confirmDisposal(scan.id, bytes, SessionController.to.language.value);
+      if (!mounted) return;
+      if (r.disposed) {
+        HapticFeedback.heavyImpact();
+        setState(() => _scan = scan.markDisposed(points: r.points, feedback: r.feedback));
+        if (r.points > 0) {
+          showToast('scan.disposedToast'.tr(args: ['${r.points}']), icon: CupertinoIcons.checkmark_seal_fill);
+          SessionController.to.refreshHome();
+        }
+      } else {
+        HapticFeedback.heavyImpact();
+        setState(() => _disposalFeedback = r.feedback.isEmpty ? 'scan.disposeRejected'.tr() : r.feedback);
+      }
+    } catch (e) {
+      showToast(friendlyError(e), error: true);
+    } finally {
+      if (mounted) setState(() => _disposing = false);
+    }
+  }
+
+  Widget _disposalCard(AppColors c, WasteScan scan) {
+    if (scan.disposed) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: c.bioSoft, borderRadius: BorderRadius.circular(18)),
+        child: Row(children: [
+          Icon(CupertinoIcons.checkmark_seal_fill, color: c.bio, size: 30),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(
+                scan.disposalPoints > 0 ? 'scan.disposedTitle'.tr(args: ['${scan.disposalPoints}']) : 'scan.disposedNoPoints'.tr(),
+                style: AppText.headline.c(c.label),
+              ),
+              if (scan.disposalFeedback.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(scan.disposalFeedback, style: AppText.footnote.c(c.secondaryLabel)),
+              ],
+            ]),
+          ),
+        ]),
+      );
+    }
+    if (!scan.canDispose) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: c.brandSoft, borderRadius: BorderRadius.circular(18)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(CupertinoIcons.trash_fill, color: c.brand, size: 24),
+          const SizedBox(width: 10),
+          Expanded(child: Text('scan.disposeTitle'.tr(), style: AppText.headline.c(c.label))),
+          Pill(label: '+3 ${'common.pts'.tr()}', icon: CupertinoIcons.star_fill, color: c.gold),
+        ]),
+        const SizedBox(height: 6),
+        Text('scan.disposeBody'.tr(), style: AppText.subhead.c(c.secondaryLabel)),
+        if (_disposalFeedback != null) ...[
+          const SizedBox(height: 10),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(CupertinoIcons.info_circle_fill, size: 17, color: c.danger),
+            const SizedBox(width: 6),
+            Expanded(child: Text(_disposalFeedback!, style: AppText.subhead.c(c.danger))),
+          ]),
+        ],
+        const SizedBox(height: 12),
+        AppButton(
+          label: _disposing ? 'scan.disposeChecking'.tr() : 'scan.disposeCta'.tr(),
+          icon: CupertinoIcons.camera_fill,
+          loading: _disposing,
+          onPressed: _dispose,
+        ),
+      ]),
+    );
   }
 
   @override
@@ -118,11 +211,9 @@ class _ScanResultViewState extends State<ScanResultView> {
             ),
             child: scan != null
                 ? Column(key: const ValueKey('done'), children: [
+                    _disposalCard(c, scan),
+                    const SizedBox(height: 14),
                     WasteResultDetails(scan: scan),
-                    if (scan.pointsAwarded > 0) ...[
-                      const SizedBox(height: 12),
-                      Text('scan.earned'.tr(args: ['${scan.pointsAwarded}']), style: AppText.subhead.semibold.c(c.brand)),
-                    ],
                     const SizedBox(height: 18),
                     if (_path != null) ...[
                       AppButton(

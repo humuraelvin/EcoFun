@@ -9,6 +9,7 @@ import '../../app/session_controller.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/buttons.dart';
+import '../../core/widgets/cards.dart';
 import '../../core/widgets/pressable.dart';
 import '../../core/widgets/progress_ring.dart';
 import '../../core/widgets/states.dart';
@@ -17,8 +18,9 @@ import '../../data/models.dart';
 import '../../data/repositories.dart';
 import '../../data/supa.dart';
 
-/// Daily quiz. Questions are generated on the server from the story read today
-/// (AI), and every answer is graded on the server — the app never knows the key.
+/// Environment quiz: 10 questions from EcoFun's ever-growing question pool, open any time.
+/// Every answer is graded on the server — the app never knows the key.
+/// The first 3 quizzes each day earn 2 points per correct answer; after that it's practice.
 class QuizView extends StatefulWidget {
   const QuizView({super.key});
 
@@ -41,7 +43,12 @@ class _QuizViewState extends State<QuizView> {
   }
 
   Future<void> _load() async {
-    setState(() => _error = null);
+    setState(() {
+      _error = null;
+      _quiz = null;
+      _result = null;
+      _index = 0;
+    });
     try {
       final load = await QuizRepository.load(SessionController.to.language.value);
       if (!mounted) return;
@@ -114,7 +121,7 @@ class _QuizViewState extends State<QuizView> {
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 280),
           child: _result != null
-              ? _Results(key: const ValueKey('r'), result: _result!)
+              ? _Results(key: const ValueKey('r'), result: _result!, onPlayAgain: _load)
               : _error != null
                   ? MessageView.error(_error!, onRetry: _load)
                   : quiz == null
@@ -171,12 +178,13 @@ class _QuizViewState extends State<QuizView> {
                   Text('quiz.questionOf'.tr(args: ['${_index + 1}', '${quiz.questions.length}']),
                       style: AppText.footnote.semibold.c(c.secondaryLabel)),
                   const Spacer(),
-                  if (quiz.source == 'ai')
-                    Row(children: [
-                      Icon(CupertinoIcons.sparkles, size: 13, color: c.brand),
-                      const SizedBox(width: 4),
-                      Text('quiz.fromStory'.tr(), style: AppText.caption.c(c.brand)),
-                    ]),
+                  Pill(
+                    icon: quiz.countsForPoints ? CupertinoIcons.star_fill : CupertinoIcons.book_fill,
+                    label: quiz.countsForPoints
+                        ? 'quiz.pointsPill'.tr(args: ['${quiz.pointsPerCorrect}'])
+                        : 'quiz.practice'.tr(),
+                    color: quiz.countsForPoints ? c.gold : c.secondaryLabel,
+                  ),
                 ]),
                 const SizedBox(height: 10),
                 Text(q.question, style: AppText.title2.c(c.label)),
@@ -194,7 +202,9 @@ class _QuizViewState extends State<QuizView> {
                 AnimatedSize(
                   duration: const Duration(milliseconds: 260),
                   curve: Curves.easeOutCubic,
-                  child: answered ? _Feedback(answer: q.answer!, options: q.options) : const SizedBox(width: double.infinity),
+                  child: answered
+                    ? _Feedback(answer: q.answer!, options: q.options, points: quiz.countsForPoints ? quiz.pointsPerCorrect : 0)
+                    : const SizedBox(width: double.infinity),
                 ),
               ],
             ),
@@ -278,9 +288,10 @@ class _Option extends StatelessWidget {
 }
 
 class _Feedback extends StatelessWidget {
-  const _Feedback({required this.answer, required this.options});
+  const _Feedback({required this.answer, required this.options, required this.points});
   final QuizAnswer answer;
   final List<String> options;
+  final int points;
 
   @override
   Widget build(BuildContext context) {
@@ -299,7 +310,7 @@ class _Feedback extends StatelessWidget {
             const SizedBox(width: 8),
             Text(answer.correct ? 'quiz.correct'.tr() : 'quiz.notQuite'.tr(), style: AppText.headline.c(color)),
             const Spacer(),
-            if (answer.correct) Text('+5 ${'common.pts'.tr()}', style: AppText.subhead.semibold.c(c.bio)),
+            if (answer.correct && points > 0) Text('+$points ${'common.pts'.tr()}', style: AppText.subhead.semibold.c(c.bio)),
           ]),
           if (!answer.correct) ...[
             const SizedBox(height: 6),
@@ -347,8 +358,9 @@ class _Preparing extends StatelessWidget {
 }
 
 class _Results extends StatelessWidget {
-  const _Results({super.key, required this.result});
+  const _Results({super.key, required this.result, required this.onPlayAgain});
   final QuizResult result;
+  final VoidCallback onPlayAgain;
 
   @override
   Widget build(BuildContext context) {
@@ -379,23 +391,37 @@ class _Results extends StatelessWidget {
           Text(headline, textAlign: TextAlign.center, style: AppText.title1.c(c.label)),
           const SizedBox(height: 8),
           Text(
-            result.alreadyCompleted
-                ? 'quiz.alreadyDone'.tr()
-                : 'quiz.earned'.tr(args: ['${result.pointsAwarded}']),
+            result.pointsAwarded > 0
+                ? 'quiz.earned'.tr(args: ['${result.pointsAwarded}'])
+                : result.alreadyCompleted
+                    ? 'quiz.alreadyDone'.tr()
+                    : 'quiz.practiceDone'.tr(),
             textAlign: TextAlign.center,
             style: AppText.callout.c(c.secondaryLabel),
           ),
+          if (!result.alreadyCompleted) ...[
+            const SizedBox(height: 6),
+            Text(
+              result.scoredLeft > 0 ? 'quiz.scoredLeft'.plural(result.scoredLeft) : 'quiz.noScoredLeft'.tr(),
+              textAlign: TextAlign.center,
+              style: AppText.footnote.c(c.tertiaryLabel),
+            ),
+          ],
           const Spacer(),
           Obx(() {
             final p = SessionController.to.progress;
             return Column(children: [
-              if (!p.missionDone)
+              AppButton(label: 'quiz.playAgain'.tr(), icon: CupertinoIcons.arrow_2_circlepath, onPressed: onPlayAgain),
+              const SizedBox(height: 10),
+              if (!p.missionDone) ...[
                 AppButton(
                   label: 'quiz.startMission'.tr(),
                   icon: CupertinoIcons.leaf_arrow_circlepath,
+                  kind: ButtonStyleKind.tinted,
                   onPressed: () => Get.offNamed(Routes.mission),
                 ),
-              const SizedBox(height: 10),
+                const SizedBox(height: 10),
+              ],
               AppButton(label: 'quiz.backHome'.tr(), kind: ButtonStyleKind.plain, onPressed: Get.back),
             ]);
           }),
