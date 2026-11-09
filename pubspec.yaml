@@ -1,7 +1,7 @@
 name: eco_fun
 description: "EcoFun — small daily climate actions for Rwanda: local environment news, AI quizzes, AI waste identification and community missions."
 publish_to: 'none'
-version: 1.0.0+2
+version: 1.1.0+2003
 
 environment:
   sdk: ^3.8.1
