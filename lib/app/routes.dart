@@ -2,13 +2,16 @@ import 'package:get/get.dart' hide Trans;
 
 import '../features/auth/login_view.dart';
 import '../features/auth/reset_password_view.dart';
-import '../features/community/admin_view.dart';
+import '../features/admin/admin_shell.dart';
+import '../features/admin/admin_user_view.dart';
 import '../features/community/compose_view.dart';
 import '../features/community/member_view.dart';
+import '../features/community/post_view.dart';
 import '../features/history/history_detail_view.dart';
 import '../features/history/history_view.dart';
 import '../features/mission/mission_view.dart';
 import '../features/news/news_detail_view.dart';
+import '../features/notifications/notifications_view.dart';
 import '../features/quiz/quiz_view.dart';
 import '../features/scan/camera_view.dart';
 import '../features/scan/scan_result_view.dart';
@@ -30,6 +33,9 @@ abstract final class Routes {
   static const compose = '/community/compose';
   static const member = '/member';
   static const admin = '/admin';
+  static const adminUser = '/admin/user';
+  static const post = '/post';
+  static const notifications = '/notifications';
 
   static final pages = <GetPage<dynamic>>[
     GetPage(name: login, page: () => const LoginView(), transition: Transition.fadeIn),
@@ -45,6 +51,9 @@ abstract final class Routes {
     GetPage(name: historyDetail, page: () => const HistoryDetailView()),
     GetPage(name: compose, page: () => const ComposeView(), fullscreenDialog: true, transition: Transition.downToUp),
     GetPage(name: member, page: () => const MemberView()),
-    GetPage(name: admin, page: () => const AdminView()),
+    GetPage(name: admin, page: () => const AdminShell(), transition: Transition.fadeIn),
+    GetPage(name: adminUser, page: () => const AdminUserView()),
+    GetPage(name: post, page: () => const PostView()),
+    GetPage(name: notifications, page: () => const NotificationsView()),
   ];
 }

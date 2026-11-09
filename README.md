@@ -2,12 +2,21 @@
 
 EcoFun is a Flutter app that turns climate awareness into a small daily habit for people in Rwanda:
 
-1. **Read** today's environment story — real news from Rwandan newsrooms, in English or Kinyarwanda.
-2. **Quiz** — five questions that EcoFun's AI writes *from the story you just read*, graded on the server.
-3. **Act** — a daily climate mission proven with a photo and a short story; waste missions are checked by AI.
+1. **Read** environment and climate stories from Rwandan newsrooms, in English or Kinyarwanda.
+2. **Quiz** any time: 10 environment questions from an ever-growing AI question pool (English + Kinyarwanda),
+   graded on the server. The first 3 quizzes each day earn 2 points per correct answer.
+3. **Act**: a daily climate mission proven with a photo and a short story.
 
-Plus an **AI waste scanner** (in-app camera → biodegradable or not, how to dispose of it in Rwanda),
-a **community** feed with star ratings and a leaderboard, streaks, points and a personal journey.
+Plus an **AI waste scanner** (in-app camera → biodegradable or not, how to dispose of it in Rwanda; points are earned
+only for *proper disposal*, verified by AI from a second photo), a **community** feed with star ratings (each rating
+gives the author 1–5 points) and comments, a live **leaderboard**, **notifications**, and an **admin portal**.
+
+**Admin portal** (sign in as an admin, e.g. the built-in `admin@ecofun.com`): live statistics and sign-up chart,
+member search with full per-member stats, give/remove points, suspend/unsuspend, delete accounts, moderate every
+shared photo, and announcements (English + Kinyarwanda with one-tap translation) delivered to every member's
+notifications and optionally by email. Admins are notified of new members, deleted accounts and new posts.
+
+Accounts exist in EcoFun only after the email code is verified; unfinished sign-ups are removed after an hour.
 
 ---
 
@@ -21,15 +30,16 @@ a **community** feed with star ratings and a leaderboard, streaks, points and a 
 | Files | Supabase Storage buckets: `missions` and `scans` (private), `community` and `avatars` (public) |
 | News | `refresh_news()` runs hourly in Postgres (pg_cron) and ingests RSS from Taarifa, Green Africa, KT Press, Rebero, Umuseke and Izuba Radio & TV |
 | Email | Gmail SMTP for everything: Supabase Auth sends the 6-digit codes (EcoFun templates), and the `ecofun-mailer` Edge Function sends welcome, password-changed, streak and goodbye emails from an outbox table. English or Kinyarwanda, following the app language |
+| Live | Supabase Realtime pushes new notifications to the app instantly |
 | AI | NVIDIA API, called from Postgres (`http` extension); the key lives in Supabase Vault, never in the app |
-| | Vision: `nvidia/nemotron-3.5-super-vl-120b-a12b` (fallback `nemotron-3-nano-omni-30b`) · Quiz: `nvidia/nemotron-3.5-lightning-30b-a3b` |
+| | Vision (scans + disposal proof): `nvidia/nemotron-3.5-super-vl-120b-a12b` (fallback `nemotron-3-nano-omni-30b`) · Quiz questions: `nvidia/nemotron-3.5-lightning-30b-a3b`, translated to Kinyarwanda with Google Translate; a cron job adds 10 new questions every 4 minutes |
 
 ```
 lib/
   app/        app shell, routes, SessionController (today's progress), NewsController
   core/       theme (colours, type), reusable widgets, utils (formatting, image compression, photo picker)
   data/       Supabase client, models, repositories, storage service, auth
-  features/   auth · shell · home · news · quiz · mission · scan · history · community · profile
+  features/   auth · shell · home · news · quiz · mission · scan · history · community · notifications · profile · admin
 supabase/
   schema.sql          the complete database (run in the SQL editor)
   secrets.example.sql template for the git-ignored secrets.local.sql (NVIDIA key + mailer secret → Vault)
@@ -64,7 +74,8 @@ per post and never on your own post, and only admins can grant points.
    `supabase functions deploy ecofun-mailer --no-verify-jwt` plus the secrets listed at the top of its `index.ts`.
 
    Gmail sends up to about 500 emails a day; for more, use a transactional provider with the same settings.
-5. Optional — make someone an admin:
+5. Admins: the built-in admin account is created with the Auth admin API (Dashboard → Authentication → Add user,
+   email `admin@ecofun.com`, "Auto confirm"); `schema.sql` marks it as admin. To make anyone else an admin:
    ```sql
    update public.profiles set is_admin = true
    where id = (select id from auth.users where email = 'admin@example.com');

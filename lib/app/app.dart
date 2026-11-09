@@ -6,8 +6,11 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart' hide Trans;
 
 import '../core/theme/app_theme.dart';
+import '../core/widgets/system_bars.dart';
 import '../data/supa.dart';
+import 'app_prefs.dart';
 import 'news_controller.dart';
+import 'notification_controller.dart';
 import 'routes.dart';
 import 'session_controller.dart';
 
@@ -47,9 +50,14 @@ class EcoFunApp extends StatelessWidget {
       transitionDuration: const Duration(milliseconds: 380),
       popGesture: true,
       getPages: Routes.pages,
-      initialRoute: signedIn ? Routes.shell : Routes.login,
+      initialRoute: !signedIn
+          ? Routes.login
+          : AppPrefs.isAdmin
+              ? Routes.admin
+              : Routes.shell,
       onInit: () {
         Get.put(NewsController(), permanent: true);
+        Get.put(NotificationController(), permanent: true);
         if (signedIn) session.start();
       },
       builder: (context, child) {
@@ -60,7 +68,7 @@ class EcoFunApp extends StatelessWidget {
           value: overlayStyle(brightness),
           child: MediaQuery(
             data: mq.copyWith(textScaler: mq.textScaler.clamp(minScaleFactor: 0.9, maxScaleFactor: 1.25)),
-            child: child ?? const SizedBox.shrink(),
+            child: SystemBarGuard(child: child ?? const SizedBox.shrink()),
           ),
         );
       },

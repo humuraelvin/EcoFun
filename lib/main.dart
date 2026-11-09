@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app/app.dart';
+import 'app/app_prefs.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,6 +13,7 @@ Future<void> main() async {
   await Future.wait([
     EasyLocalization.ensureInitialized(),
     dotenv.load(fileName: 'assets/config/.env'),
+    AppPrefs.load(),
   ]);
 
   // Restores the saved session before the first frame, so signed-in users go straight to Home.

@@ -280,7 +280,7 @@ class _ProfileViewState extends State<ProfileView> {
                         icon: CupertinoIcons.shield_lefthalf_fill,
                         iconColor: const Color(0xFF8E5CF7),
                         title: 'admin.portal'.tr(),
-                        onTap: () => Get.toNamed(Routes.admin),
+                        onTap: () => Get.offAllNamed(Routes.admin),
                       )
                     : const SizedBox.shrink()),
               ]),
