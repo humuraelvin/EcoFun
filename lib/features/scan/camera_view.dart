@@ -7,6 +7,7 @@ import 'package:get/get.dart' hide Trans;
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../core/widgets/system_bars.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/widgets/buttons.dart';
 import '../../core/widgets/pressable.dart';
@@ -35,12 +36,14 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    SystemBarGuard.hidden.value = true;   // the camera preview uses the whole screen
     WidgetsBinding.instance.addObserver(this);
     _start();
   }
 
   @override
   void dispose() {
+    SystemBarGuard.hidden.value = false;
     WidgetsBinding.instance.removeObserver(this);
     _ctrl?.dispose();
     super.dispose();

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart' hide Trans;
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
 
 import '../../app/routes.dart';
 import '../../app/session_controller.dart';
@@ -52,11 +53,8 @@ class _LoginViewState extends State<LoginView> {
     });
   }
 
-  Future<void> _enterApp() async {
-    TextInput.finishAutofillContext();
-    Get.offAllNamed(Routes.shell);
-    SessionController.to.start();
-  }
+  /// Opens the member app, or the admin portal for admins.
+  Future<void> _enterApp() => SessionController.to.enterApp();
 
   Future<void> _run(Future<void> Function() action) async {
     FocusScope.of(context).unfocus();
@@ -90,7 +88,17 @@ class _LoginViewState extends State<LoginView> {
 
     if (_mode == _Mode.signIn) {
       return _run(() async {
-        await AuthRepository.signIn(email, _password.text);
+        try {
+          await AuthRepository.signIn(email, _password.text);
+        } on AuthException catch (e) {
+          // Signed up earlier but never entered the code: send a fresh code and ask for it.
+          if (e.message.toLowerCase().contains('email not confirmed')) {
+            await AuthRepository.resendConfirmation(email);
+            if (mounted) setState(() => _mode = _Mode.confirm);
+            return;
+          }
+          rethrow;
+        }
         await _enterApp();
       });
     }
@@ -127,17 +135,15 @@ class _LoginViewState extends State<LoginView> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: AutofillGroup(
-                child: AnimatedSize(
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOutCubic,
-                  alignment: Alignment.topCenter,
-                  child: _mode == _Mode.confirm ? _confirm(c) : _form(c),
-                ),
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: _mode == _Mode.confirm ? _confirm(c) : _form(c),
               ),
             ),
           ),
@@ -178,31 +184,31 @@ class _LoginViewState extends State<LoginView> {
         const SizedBox(height: 18),
         if (signUp) ...[
           AppTextField(
+            key: const ValueKey('name'),
             controller: _name,
             placeholder: 'auth.fullName'.tr(),
             icon: CupertinoIcons.person,
             textCapitalization: TextCapitalization.words,
             textInputAction: TextInputAction.next,
-            autofillHints: const [AutofillHints.name],
           ),
           const SizedBox(height: 10),
         ],
         AppTextField(
+          key: const ValueKey('email'),
           controller: _email,
           placeholder: 'auth.email'.tr(),
           icon: CupertinoIcons.mail,
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
-          autofillHints: const [AutofillHints.email],
         ),
         const SizedBox(height: 10),
         AppTextField(
+          key: const ValueKey('password'),
           controller: _password,
           placeholder: 'auth.password'.tr(),
           icon: CupertinoIcons.lock,
           obscure: true,
           textInputAction: TextInputAction.done,
-          autofillHints: [signUp ? AutofillHints.newPassword : AutofillHints.password],
           onSubmitted: (_) => _submit(),
         ),
         _errorText(c),
@@ -303,11 +309,11 @@ class _LoginViewState extends State<LoginView> {
           ),
           const SizedBox(height: 22),
           AppTextField(
+            key: const ValueKey('code'),
             controller: _code,
             placeholder: 'auth.code'.tr(),
             icon: CupertinoIcons.number,
             keyboardType: TextInputType.number,
-            autofillHints: const [AutofillHints.oneTimeCode],
             inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
             onSubmitted: (_) => _submit(),
           ),

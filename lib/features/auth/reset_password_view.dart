@@ -79,7 +79,7 @@ class _ResetPasswordViewState extends State<ResetPasswordView> {
       ),
       body: SafeArea(
         child: ListView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
           children: [
             Icon(_sent ? CupertinoIcons.envelope_badge_fill : CupertinoIcons.lock_rotation, size: 46, color: c.brand),
@@ -91,29 +91,29 @@ class _ResetPasswordViewState extends State<ResetPasswordView> {
             ),
             const SizedBox(height: 22),
             AppTextField(
+              key: const ValueKey('email'),
               controller: _email,
               placeholder: 'auth.email'.tr(),
               icon: CupertinoIcons.mail,
               keyboardType: TextInputType.emailAddress,
-              autofillHints: const [AutofillHints.email],
             ),
             if (_sent) ...[
               const SizedBox(height: 10),
               AppTextField(
+                key: const ValueKey('code'),
                 controller: _code,
                 placeholder: 'auth.code'.tr(),
                 icon: CupertinoIcons.number,
                 keyboardType: TextInputType.number,
-                autofillHints: const [AutofillHints.oneTimeCode],
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
               ),
               const SizedBox(height: 10),
               AppTextField(
+                key: const ValueKey('password'),
                 controller: _password,
                 placeholder: 'auth.newPassword'.tr(),
                 icon: CupertinoIcons.lock,
                 obscure: true,
-                autofillHints: const [AutofillHints.newPassword],
                 onSubmitted: (_) => _submit(),
               ),
             ],

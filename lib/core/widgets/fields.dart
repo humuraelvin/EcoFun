@@ -14,7 +14,6 @@ class AppTextField extends StatefulWidget {
     this.obscure = false,
     this.keyboardType,
     this.textInputAction,
-    this.autofillHints,
     this.onSubmitted,
     this.maxLength,
     this.maxLines = 1,
@@ -31,7 +30,6 @@ class AppTextField extends StatefulWidget {
   final bool obscure;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
-  final Iterable<String>? autofillHints;
   final ValueChanged<String>? onSubmitted;
   final int? maxLength;
   final int maxLines;
@@ -45,8 +43,19 @@ class AppTextField extends StatefulWidget {
   State<AppTextField> createState() => _AppTextFieldState();
 }
 
+/// Text field that keeps the keyboard open while typing.
+///
+/// System autofill is deliberately off: on many Android phones its suggestion pop-up opens over the
+/// field after each letter and closes the keyboard. Gboard still offers its own suggestions.
 class _AppTextFieldState extends State<AppTextField> {
   late bool _hidden = widget.obscure;
+
+  @override
+  void didUpdateWidget(covariant AppTextField old) {
+    super.didUpdateWidget(old);
+    // Never let a field inherit another field's "hidden" state (e.g. email after password).
+    if (old.obscure != widget.obscure) _hidden = widget.obscure;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +79,7 @@ class _AppTextFieldState extends State<AppTextField> {
               obscureText: _hidden,
               keyboardType: widget.keyboardType,
               textInputAction: widget.textInputAction,
-              autofillHints: widget.autofillHints,
+              autofillHints: null,
               onSubmitted: widget.onSubmitted,
               onChanged: widget.onChanged,
               maxLength: widget.maxLength,

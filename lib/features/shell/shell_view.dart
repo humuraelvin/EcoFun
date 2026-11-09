@@ -90,7 +90,7 @@ class _TabBar extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: c.surfaceRaised.withValues(alpha: 0.97),
+        color: c.background,   // solid: content scrolls underneath without showing through
         border: Border(top: BorderSide(color: c.separator, width: 0.5)),
       ),
       padding: EdgeInsets.only(bottom: bottom > 0 ? bottom : 6, top: 6),
