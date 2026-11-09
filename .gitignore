@@ -1,0 +1,66 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Google Services (sensitive files)
+**/google-services.json
+**/GoogleService-Info.plist
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+.cursor/
+
+firebase.json
+.github
+firebase_options.dart
+
+# Firebase app configuration and trusted server function source are intentional
+# project files. SMTP values must still be stored only in Firebase Secrets.
+!firebase.json
+!lib/firebase_options.dart
+functions/node_modules/
