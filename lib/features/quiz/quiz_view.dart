@@ -61,6 +61,10 @@ class _QuizViewState extends State<QuizView> {
             ));
         return;
       }
+      if (load.quiz!.questions.isEmpty) {
+        setState(() => _error = 'errors.quizPreparing'.tr());
+        return;
+      }
       final firstOpen = load.quiz!.questions.indexWhere((q) => q.answer == null);
       setState(() {
         _quiz = load.quiz;

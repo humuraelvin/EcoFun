@@ -1085,6 +1085,11 @@ begin
   select count(*) into scored_today from public.quiz_sessions
   where user_id = uid and scored and (finished_at at time zone 'Africa/Kigali')::date = public.eco_today();
 
+  -- Unfinished quizzes whose questions were removed from the pool can never be finished: drop them.
+  delete from public.quiz_sessions s
+  where s.user_id = uid and s.finished_at is null
+    and (select count(*) from public.quiz_session_items i where i.session_id = s.id) < 4;
+
   select id into sid from public.quiz_sessions
   where user_id = uid and finished_at is null and language = lang and created_at > now() - interval '3 hours'
   order by created_at desc limit 1;
@@ -2211,6 +2216,8 @@ where p.points is distinct from greatest(0, coalesce((select sum(amount) from pu
 delete from public.quiz_pool
 where source = 'ai'
    or question_en ~ '[0-9]' or array_to_string(choices_en, ' ') ~ '[0-9]';
+delete from public.quiz_sessions s
+where s.finished_at is null and (select count(*) from public.quiz_session_items i where i.session_id = s.id) < 4;
 -- The built-in admin account (created with the Auth admin API) is always an admin.
 update public.profiles set is_admin = true, full_name = 'EcoFun Admin'
 where id in (select id from auth.users where lower(email) = 'admin@ecofun.com') and not is_admin;
