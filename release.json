@@ -1,0 +1,5 @@
+{
+  "version_name": "1.2.0",
+  "version_code": 2010,
+  "notes": "### What's new\nFirst public release of EcoFun: practical environment quizzes, AI waste scanner with disposal points, community photos with ratings and comments, notifications, and English + Kinyarwanda.\n\n### Ibishya\nVerisiyo ya mbere ya EcoFun: ibibazo ku kubungabunga ibidukikije, AI isuzuma imyanda ikaguha amanota iyo uyijugunye neza, amafoto y'umuryango n'ibitekerezo, imenyesha, mu Cyongereza no mu Kinyarwanda.\n\n**Install on Android:** open https://github.com/humuraelvin/EcoFun/releases/latest/download/EcoFun.apk on your phone, then tap Install.\n\nSize: 40M · SHA-256: `f5262ad6125a098d3a0222b79ede4e2d329881d10700fddc1dee6c1278332c45`"
+}
