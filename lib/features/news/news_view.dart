@@ -52,18 +52,6 @@ class _NewsViewState extends State<NewsView> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text('news.subtitle'.tr(), style: AppText.subhead.c(c.secondaryLabel)),
-                const SizedBox(height: 12),
-                Obx(() => CupertinoSlidingSegmentedControl<String>(
-                      groupValue: news.filter.value ?? 'all',
-                      backgroundColor: c.fill,
-                      thumbColor: c.surface,
-                      children: {
-                        'all': _seg('news.all'.tr()),
-                        'en': _seg('news.english'.tr()),
-                        'rw': _seg('news.kinyarwanda'.tr()),
-                      },
-                      onValueChanged: (v) => news.setFilter(v == 'all' ? null : v),
-                    )),
               ],
             ),
           ),
@@ -119,8 +107,4 @@ class _NewsViewState extends State<NewsView> {
     );
   }
 
-  Widget _seg(String t) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(t, style: AppText.subhead.semibold),
-      );
 }

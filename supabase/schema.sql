@@ -253,6 +253,12 @@ alter table public.waste_scans add column if not exists disposed_at timestamptz;
 alter table public.waste_scans add column if not exists disposal_image_path text;
 alter table public.waste_scans add column if not exists disposal_feedback text;
 alter table public.waste_scans add column if not exists disposal_points integer not null default 0;
+-- Every text a member sees exists in both languages, so switching language changes everything.
+alter table public.waste_scans add column if not exists i18n jsonb not null default '{}';
+alter table public.news_articles add column if not exists tr_title text;      -- translation into the other language
+alter table public.news_articles add column if not exists tr_summary text;
+alter table public.news_articles add column if not exists tr_body text;
+alter table public.news_articles add column if not exists tr_attempts integer not null default 0;
 
 -- The first release generated quizzes from news articles; those tables are replaced by the pool above.
 drop function if exists public._quiz_from_ai(public.news_articles, text);
@@ -496,38 +502,96 @@ exception when others then
 end;
 $$;
 
--- Google Translate (en <-> rw). Translates a list of short texts in one request; returns null on failure.
+-- Google Translate (en <-> rw) for a list of texts; returns one translation per text, or null on failure.
+-- Primary: the dict-chrome-ex endpoint (one `q` per text, so texts can never get mixed up).
+-- Fallback: the gtx endpoint (texts joined by line breaks).
 create or replace function public._translate(p_texts text[], p_from text, p_to text)
 returns text[] language plpgsql volatile security definer set search_path = '' as $$
 declare
   resp    record;
-  joined  text;
+  body    text;
+  j       jsonb;
   out     text := '';
   seg     jsonb;
   parts   text[];
+  n       integer := coalesce(array_length(p_texts, 1), 0);
 begin
-  if p_texts is null or array_length(p_texts, 1) is null then return p_texts; end if;
-  joined := array_to_string(array(select regexp_replace(coalesce(t, ''), '\s*[\r\n]+\s*', ' ', 'g') from unnest(p_texts) t), E'\n');
-  perform extensions.http_set_curlopt('CURLOPT_TIMEOUT', '20');
+  if n = 0 then return p_texts; end if;
+  perform extensions.http_set_curlopt('CURLOPT_TIMEOUT', '25');
+
+  body := array_to_string(array(select 'q=' || extensions.urlencode(coalesce(t, '')) from unnest(p_texts) t), '&');
+  begin
+    select status, content as c into resp from extensions.http((
+      'POST',
+      'https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=' || p_from || '&tl=' || p_to,
+      array[extensions.http_header('User-Agent', 'Mozilla/5.0 (Linux; Android 14) EcoFun/1.0')],
+      'application/x-www-form-urlencoded', body)::extensions.http_request);
+    if resp.status = 200 then
+      j := resp.c::jsonb;
+      if jsonb_typeof(j) = 'array' and jsonb_array_length(j) = n then
+        return array(select btrim(case when jsonb_typeof(e) = 'array' then e ->> 0 else e #>> '{}' end)
+                     from jsonb_array_elements(j) e);
+      end if;
+    end if;
+  exception when others then
+    null;   -- fall through to the second endpoint
+  end;
+
+  body := 'q=' || extensions.urlencode(array_to_string(
+            array(select regexp_replace(coalesce(t, ''), '\s*[\r\n]+\s*', ' ', 'g') from unnest(p_texts) t), E'\n'));
   select status, content as c into resp from extensions.http((
     'POST',
     'https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=' || p_from || '&tl=' || p_to,
     array[extensions.http_header('User-Agent', 'Mozilla/5.0 (Linux; Android 14) EcoFun/1.0')],
-    'application/x-www-form-urlencoded',
-    'q=' || extensions.urlencode(joined)
-  )::extensions.http_request);
+    'application/x-www-form-urlencoded', body)::extensions.http_request);
   if resp.status <> 200 then return null; end if;
   for seg in select * from jsonb_array_elements((resp.c::jsonb) -> 0) loop
     out := out || coalesce(seg ->> 0, '');
   end loop;
-  parts := regexp_split_to_array(out, E'\s*\n\s*');
-  if array_length(parts, 1) <> array_length(p_texts, 1) then return null; end if;
-  return array(select btrim(x) from unnest(parts) x);
+  parts := regexp_split_to_array(btrim(out), E'\\s*\\n\\s*');
+  if array_length(parts, 1) = n then return array(select btrim(x) from unnest(parts) x); end if;
+  if n = 1 then return array[btrim(array_to_string(parts, ' '))]; end if;
+  return null;
 exception when others then
   raise warning 'EcoFun translate failed: %', sqlerrm;
   return null;
 end;
 $$;
+
+-- Translates long text (news bodies) paragraph by paragraph, in requests of ~3,500 characters.
+create or replace function public._translate_long(p_text text, p_from text, p_to text)
+returns text language plpgsql volatile security definer set search_path = '' as $$
+declare
+  paras  text[] := array(select btrim(x) from regexp_split_to_table(coalesce(p_text, ''), E'\n\s*\n') x where btrim(x) <> '');
+  chunk  text[] := '{}';
+  size   integer := 0;
+  outp   text[] := '{}';
+  part   text[];
+  para   text;
+  k      integer;
+begin
+  if array_length(paras, 1) is null then return ''; end if;
+  paras := paras || array[null::text];          -- sentinel: flush the last chunk
+  foreach para in array paras loop
+    if array_length(chunk, 1) is not null and (para is null or size + char_length(para) > 4000) then
+      part := public._translate(chunk, p_from, p_to);
+      if part is null then
+        -- the whole block failed (e.g. a line break inside the reply): retry one paragraph at a time
+        part := '{}';
+        for k in 1 .. array_length(chunk, 1) loop
+          part := part || coalesce((public._translate(array[chunk[k]], p_from, p_to))[1], chunk[k]);
+        end loop;
+      end if;
+      outp := outp || part; chunk := '{}'; size := 0;
+    end if;
+    exit when para is null;
+    chunk := chunk || left(para, 3500);
+    size := size + char_length(para);
+  end loop;
+  return array_to_string(outp, E'\n\n');
+end;
+$$;
+
 
 create or replace function public._award_points(p_user uuid, p_amount integer, p_reason text, p_note text default null, p_by uuid default null)
 returns void language plpgsql security definer set search_path = '' as $$
@@ -766,6 +830,28 @@ begin
 
   delete from public.news_articles where published_at < now() - interval '120 days';
   return saved;
+end;
+$$;
+
+-- Translates stories into the other language (English <-> Kinyarwanda), newest first.
+-- Members only ever see stories in their own language; untranslated stories wait until this job runs.
+create or replace function public._translate_news(p_limit integer default 6)
+returns integer language plpgsql volatile security definer set search_path = '' as $$
+declare a record; head text[]; v_body text; other text; n integer := 0;
+begin
+  for a in select * from public.news_articles
+           where tr_title is null and tr_attempts < 5
+           order by published_at desc limit greatest(p_limit, 1) loop
+    other := case when a.language = 'rw' then 'en' else 'rw' end;
+    update public.news_articles set tr_attempts = tr_attempts + 1 where id = a.id;
+    head := public._translate(array[a.title, coalesce(nullif(a.summary, ''), a.title)], a.language, other);
+    continue when head is null;
+    v_body := public._translate_long(a.body, a.language, other);
+    continue when v_body is null;
+    update public.news_articles set tr_title = head[1], tr_summary = head[2], tr_body = v_body where id = a.id;
+    n := n + 1;
+  end loop;
+  return n;
 end;
 $$;
 
@@ -1201,6 +1287,28 @@ $$;
 -- ----------------------------------------------------------------------------
 -- 10. AI waste identification
 -- ----------------------------------------------------------------------------
+-- {"en": {...}, "rw": {...}} with item, material, reason, decompose_time, disposal, tip.
+create or replace function public._scan_i18n(p_scan public.waste_scans, p_lang text)
+returns jsonb language plpgsql volatile security definer set search_path = '' as $$
+declare
+  other text := case when p_lang = 'rw' then 'en' else 'rw' end;
+  src   text[] := array[p_scan.item, p_scan.material, p_scan.reason, p_scan.decompose_time, p_scan.disposal, p_scan.tip];
+  tr    text[];
+  mk    jsonb;
+begin
+  tr := public._translate(array(select coalesce(nullif(x, ''), '-') from unnest(src) x), p_lang, other);
+  mk := jsonb_build_object('item', src[1], 'material', src[2], 'reason', src[3], 'decompose_time', src[4],
+                           'disposal', src[5], 'tip', src[6]);
+  if tr is null then return jsonb_build_object(p_lang, mk); end if;
+  return jsonb_build_object(p_lang, mk, other, jsonb_build_object(
+    'item', tr[1], 'material', nullif(tr[2], '-'), 'reason', nullif(tr[3], '-'), 'decompose_time', nullif(tr[4], '-'),
+    'disposal', nullif(tr[5], '-'), 'tip', nullif(tr[6], '-')));
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- 10b. Scanning
+-- ----------------------------------------------------------------------------
 create or replace function public.classify_waste(p_image_base64 text, p_mime text default 'image/jpeg',
                                                  p_image_path text default null, p_language text default 'en')
 returns jsonb language plpgsql volatile security definer set search_path = '' as $$
@@ -1274,6 +1382,10 @@ begin
           model)
   returning * into scan;
 
+  -- Store the result in both languages, so the scan follows the member's language forever.
+  scan.i18n := public._scan_i18n(scan, case when p_language = 'rw' then 'rw' else 'en' end);
+  update public.waste_scans set i18n = scan.i18n where id = scan.id;
+
   -- Scanning itself earns nothing; points come when the item is disposed of properly (confirm_disposal).
   return to_jsonb(scan) || jsonb_build_object('points_awarded', 0);
 end;
@@ -1346,7 +1458,12 @@ begin
   if today_disposals < 10 then pts := 3; end if;
 
   update public.waste_scans set disposed_at = now(), disposal_image_path = p_image_path,
-         disposal_feedback = feedback, disposal_points = pts
+         disposal_feedback = feedback, disposal_points = pts,
+         i18n = i18n || jsonb_build_object('feedback', jsonb_build_object(
+                  case when p_language = 'rw' then 'rw' else 'en' end, feedback,
+                  case when p_language = 'rw' then 'en' else 'rw' end,
+                  (public._translate(array[coalesce(nullif(feedback, ''), '-')], case when p_language = 'rw' then 'rw' else 'en' end,
+                                     case when p_language = 'rw' then 'en' else 'rw' end))[1]))
   where id = scan.id;
   perform public._award_points(uid, pts, 'disposal', scan.item);
   return jsonb_build_object('disposed', true, 'points_awarded', pts, 'feedback', feedback);
@@ -2219,6 +2336,8 @@ begin
   perform cron.schedule('ecofun-mailer', '*/10 * * * *', 'select public._mailer_cron();');
   perform cron.unschedule(jobid) from cron.job where jobname = 'ecofun-quiz-pool';
   perform cron.schedule('ecofun-quiz-pool', '*/4 * * * *', 'select public._quiz_pool_tick();');
+  perform cron.unschedule(jobid) from cron.job where jobname = 'ecofun-translate-news';
+  perform cron.schedule('ecofun-translate-news', '*/5 * * * *', 'select public._translate_news(6);');
   perform cron.unschedule(jobid) from cron.job where jobname = 'ecofun-purge-unverified';
   perform cron.schedule('ecofun-purge-unverified', '*/15 * * * *', 'select public._purge_unverified();');
 end $$;
@@ -2240,6 +2359,8 @@ where s.finished_at is null and (select count(*) from public.quiz_session_items 
 update public.profiles set is_admin = true, full_name = 'EcoFun Admin'
 where id in (select id from auth.users where lower(email) = 'admin@ecofun.com') and not is_admin;
 select public._purge_unverified() as unverified_removed;
+-- Older scans: add the missing language.
+update public.waste_scans s set i18n = public._scan_i18n(s, 'en') where s.i18n = '{}'::jsonb;
 
 -- Fill the news feed right now.
 select public.refresh_news() as articles_saved;

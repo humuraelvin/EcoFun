@@ -14,7 +14,8 @@ import '../../data/models.dart';
 
 void openArticle(NewsArticle a) => Get.toNamed(Routes.news, arguments: a);
 
-String languageLabel(String code) => code == 'rw' ? 'news.kinyarwanda'.tr() : 'news.english'.tr();
+/// Small note on stories the app translated for the member (always in the member's language).
+String translatedLabel(NewsArticle a) => a.isTranslated ? 'news.translated'.tr() : '';
 
 class SourceLine extends StatelessWidget {
   const SourceLine(this.article, {super.key, this.light = false, this.read = false});
@@ -154,7 +155,7 @@ class StoryRow extends StatelessWidget {
                     style: AppText.headline.c(read ? c.secondaryLabel : c.label),
                   ),
                   const SizedBox(height: 6),
-                  Text(languageLabel(article.language), style: AppText.caption.c(c.tertiaryLabel)),
+                  if (article.isTranslated) Text(translatedLabel(article), style: AppText.caption.c(c.tertiaryLabel)),
                 ],
               ),
             ),

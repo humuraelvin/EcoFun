@@ -17,7 +17,8 @@
     "no": "No",
     "pts": "pts",
     "points": "points",
-    "next": "Next"
+    "next": "Next",
+    "member": "EcoFun member"
   },
   "time": {
     "now": "Just now",
@@ -142,7 +143,8 @@
     "quizReady": "Ready to test what you learned?",
     "takeQuiz": "Take a quiz",
     "quizTitle": "Test what you know",
-    "quizOptional": "Optional: 10 quick environment questions."
+    "quizOptional": "Optional: 10 quick environment questions.",
+    "translated": "Translated by EcoFun"
   },
   "quiz": {
     "title": "Environment quiz",
@@ -527,5 +529,16 @@
     "now": "Update now",
     "later": "Later",
     "hint": "The new version downloads in your browser. Open it and tap Install — your account stays signed in."
+  },
+  "onboarding": {
+    "skip": "Skip",
+    "next": "Next",
+    "start": "Get started",
+    "learnTitle": "Learn every day",
+    "learnBody": "Read environment news from Rwanda and answer short, practical quizzes about caring for nature.",
+    "scanTitle": "Scan, sort, earn",
+    "scanBody": "Point your camera at any waste. EcoFun tells you how to dispose of it — and you earn points when you do it right.",
+    "communityTitle": "Act together",
+    "communityBody": "Do a small climate mission each day, share photos, rate others and climb the leaderboard."
   }
 }

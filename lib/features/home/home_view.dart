@@ -84,7 +84,7 @@ class HomeView extends StatelessWidget {
               return FeaturedStoryCard(
                 article: featured,
                 read: p.newsRead && p.articleId == featured.id,
-                badge: '${'news.minRead'.tr(args: ['${featured.readingMinutes}'])} · ${languageLabel(featured.language)}',
+                badge: 'news.minRead'.tr(args: ['${featured.readingMinutes}']),
               );
             }),
           ),

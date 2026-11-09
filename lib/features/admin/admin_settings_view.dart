@@ -7,6 +7,7 @@ import '../../app/routes.dart';
 import '../../app/session_controller.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text.dart';
+import '../../core/utils/language.dart';
 import '../../core/widgets/cards.dart';
 import '../../core/widgets/large_title_page.dart';
 import '../../core/widgets/photos.dart';
@@ -26,7 +27,7 @@ class AdminSettingsView extends StatelessWidget {
             Text('profile.language'.tr(), style: AppText.headline),
             const SizedBox(height: 14),
             GroupedSection(children: [
-              for (final (code, country, label, flag) in const [('en', 'US', 'English', '🇬🇧'), ('rw', 'RW', 'Ikinyarwanda', '🇷🇼')])
+              for (final (code, _, label, flag) in const [('en', 'US', 'English', '🇬🇧'), ('rw', 'RW', 'Ikinyarwanda', '🇷🇼')])
                 GroupedRow(
                   icon: CupertinoIcons.globe,
                   title: '$flag  $label',
@@ -35,10 +36,7 @@ class AdminSettingsView extends StatelessWidget {
                   onTap: () async {
                     Navigator.pop(ctx);
                     if (current == code) return;
-                    final locale = Locale(code, country);
-                    await context.setLocale(locale);
-                    Get.updateLocale(locale);
-                    SessionController.to.language.value = code;
+                    await applyLanguage(context, code);
                   },
                 ),
             ]),

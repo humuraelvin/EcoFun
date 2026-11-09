@@ -139,7 +139,9 @@ class _NewsDetailViewState extends State<NewsDetailView> {
                   Text(_article.title, style: AppText.title1.c(c.label)),
                   const SizedBox(height: 10),
                   Text(
-                    '${languageLabel(_article.language)} · ${Fmt.date(_article.publishedAt)}',
+                    _article.isTranslated
+                        ? '${Fmt.date(_article.publishedAt)} · ${'news.translated'.tr()}'
+                        : Fmt.date(_article.publishedAt),
                     style: AppText.footnote.c(c.secondaryLabel),
                   ),
                   const SizedBox(height: 18),

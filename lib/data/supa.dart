@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/utils/app_lang.dart';
+
 SupabaseClient get supa => Supabase.instance.client;
 
 String get currentUid {
@@ -87,7 +89,8 @@ String friendlyError(Object error) {
     if (m.contains('network') || m.contains('socket') || m.contains('failed host lookup')) {
       return 'errors.offline'.tr();
     }
-    return error.message;
+    // Unknown auth messages are English: only English readers get the detail.
+    return AppLang.isRw ? 'errors.generic'.tr() : error.message;
   }
   if (error is PostgrestException) {
     final key = _serverMessageKeys[error.message];
@@ -96,7 +99,7 @@ String friendlyError(Object error) {
       return 'errors.notSetUp'.tr();
     }
     if (error.code == '57014') return 'errors.slow'.tr();
-    if (error.code == 'P0001') return error.message;
+    if (error.code == 'P0001') return AppLang.isRw ? 'errors.generic'.tr() : error.message;
     return 'errors.generic'.tr();
   }
   if (error is StorageException) return 'errors.upload'.tr();

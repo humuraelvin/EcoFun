@@ -12,6 +12,7 @@ import '../features/history/history_view.dart';
 import '../features/mission/mission_view.dart';
 import '../features/news/news_detail_view.dart';
 import '../features/notifications/notifications_view.dart';
+import '../features/onboarding/onboarding_view.dart';
 import '../features/quiz/quiz_view.dart';
 import '../features/scan/camera_view.dart';
 import '../features/scan/scan_result_view.dart';
@@ -19,6 +20,7 @@ import '../features/scan/scan_view.dart';
 import '../features/shell/shell_view.dart';
 
 abstract final class Routes {
+  static const welcome = '/welcome';
   static const login = '/login';
   static const reset = '/reset';
   static const shell = '/';
@@ -38,6 +40,7 @@ abstract final class Routes {
   static const notifications = '/notifications';
 
   static final pages = <GetPage<dynamic>>[
+    GetPage(name: welcome, page: () => const OnboardingView(), transition: Transition.fadeIn),
     GetPage(name: login, page: () => const LoginView(), transition: Transition.fadeIn),
     GetPage(name: reset, page: () => const ResetPasswordView()),
     GetPage(name: shell, page: () => const ShellView(), transition: Transition.fadeIn),

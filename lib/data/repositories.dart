@@ -45,16 +45,16 @@ abstract final class HomeRepository {
 }
 
 abstract final class NewsRepository {
-  static const _cacheKey = 'news_cache_v1';
+  static const _cacheKey = 'news_cache_v2';
   static const pageSize = 20;
 
-  static Future<List<NewsArticle>> list({String? language, DateTime? before}) async {
-    var q = supa.from('news_articles').select(NewsArticle.listColumns);
-    if (language != null) q = q.eq('language', language);
+  /// Stories readable in [language]: written in it, or already translated into it.
+  static Future<List<NewsArticle>> list({required String language, DateTime? before}) async {
+    var q = supa.from('news_articles').select(NewsArticle.listColumns).or('language.eq.$language,tr_title.not.is.null');
     if (before != null) q = q.lt('published_at', before.toUtc().toIso8601String());
     final rows = await q.order('published_at', ascending: false).limit(pageSize);
     final list = (rows as List).map((e) => NewsArticle.fromJson(_map(e))).toList();
-    if (language == null && before == null) _save(list);
+    if (before == null) _save(language, list);
     return list;
   }
 
@@ -68,10 +68,10 @@ abstract final class NewsRepository {
     return (rows as List).map((e) => e['article_id'] as String).toSet();
   }
 
-  static Future<List<NewsArticle>> cached() async {
+  static Future<List<NewsArticle>> cached(String language) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_cacheKey);
+      final raw = prefs.getString('$_cacheKey:$language');
       if (raw == null) return const [];
       return (jsonDecode(raw) as List).map((e) => NewsArticle.fromJson(_map(e))).toList();
     } catch (_) {
@@ -79,10 +79,10 @@ abstract final class NewsRepository {
     }
   }
 
-  static Future<void> _save(List<NewsArticle> list) async {
+  static Future<void> _save(String language, List<NewsArticle> list) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_cacheKey, jsonEncode(list.take(30).map((a) => a.toJson()).toList()));
+      await prefs.setString('$_cacheKey:$language', jsonEncode(list.take(30).map((a) => a.toJson()).toList()));
     } catch (_) {}
   }
 }

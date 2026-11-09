@@ -1,4 +1,12 @@
+import 'package:easy_localization/easy_localization.dart';
+
+import '../core/utils/app_lang.dart';
+
 // Plain data classes for everything the app reads from Supabase.
+
+/// Members without a chosen name are stored as "EcoFun member"; show that in the app language.
+String memberName(String? stored) =>
+    stored == null || stored.isEmpty || stored == 'EcoFun member' ? 'common.member'.tr() : stored;
 
 DateTime _date(dynamic v) => v == null ? DateTime.now() : DateTime.parse(v as String).toLocal();
 int _int(dynamic v) => v == null ? 0 : (v as num).toInt();
@@ -14,7 +22,7 @@ class Profile {
 
   factory Profile.fromJson(Map<String, dynamic> j) => Profile(
         id: j['id'] as String,
-        fullName: (j['full_name'] as String?) ?? 'EcoFun member',
+        fullName: memberName(j['full_name'] as String?),
         avatarUrl: j['avatar_url'] as String?,
         points: _int(j['points']),
         isAdmin: j['is_admin'] == true,
@@ -157,13 +165,18 @@ class HomeData {
       );
 }
 
+/// A news story. Every story exists in English and Kinyarwanda (translated on the server);
+/// [title], [summary] and [body] always return the member's language ([AppLang.code]).
 class NewsArticle {
   const NewsArticle({
     required this.id,
     required this.url,
-    required this.title,
-    required this.summary,
-    required this.body,
+    required this.originalTitle,
+    required this.originalSummary,
+    required this.originalBody,
+    this.trTitle,
+    this.trSummary,
+    this.trBody,
     this.imageUrl,
     required this.source,
     required this.language,
@@ -172,15 +185,30 @@ class NewsArticle {
 
   final String id;
   final String url;
-  final String title;
-  final String summary;
-  final String body;
+  final String originalTitle;
+  final String originalSummary;
+  final String originalBody;
+  final String? trTitle;
+  final String? trSummary;
+  final String? trBody;
   final String? imageUrl;
   final String source;
-  final String language;
+  final String language; // language the newsroom wrote it in
   final DateTime publishedAt;
 
-  static const listColumns = 'id,url,title,summary,image_url,source,language,published_at';
+  static const listColumns = 'id,url,title,summary,image_url,source,language,published_at,tr_title,tr_summary';
+
+  bool get _native => language == AppLang.code;
+
+  /// True when this story can be shown in the member's language.
+  bool get availableInAppLanguage => _native || (trTitle?.isNotEmpty ?? false);
+
+  /// True when the member reads a translation of the newsroom's original.
+  bool get isTranslated => !_native;
+
+  String get title => _native ? originalTitle : (trTitle ?? originalTitle);
+  String get summary => _native ? originalSummary : (trSummary ?? '');
+  String get body => _native ? originalBody : (trBody ?? '');
 
   bool get hasBody => body.trim().length > summary.trim().length + 40;
 
@@ -198,9 +226,12 @@ class NewsArticle {
   factory NewsArticle.fromJson(Map<String, dynamic> j) => NewsArticle(
         id: j['id'] as String,
         url: j['url'] as String,
-        title: j['title'] as String,
-        summary: (j['summary'] as String?) ?? '',
-        body: (j['body'] as String?) ?? '',
+        originalTitle: j['title'] as String,
+        originalSummary: (j['summary'] as String?) ?? '',
+        originalBody: (j['body'] as String?) ?? '',
+        trTitle: j['tr_title'] as String?,
+        trSummary: j['tr_summary'] as String?,
+        trBody: j['tr_body'] as String?,
         imageUrl: j['image_url'] as String?,
         source: j['source'] as String,
         language: j['language'] as String,
@@ -210,21 +241,27 @@ class NewsArticle {
   Map<String, dynamic> toJson() => {
         'id': id,
         'url': url,
-        'title': title,
-        'summary': summary,
-        'body': body,
+        'title': originalTitle,
+        'summary': originalSummary,
+        'body': originalBody,
+        'tr_title': trTitle,
+        'tr_summary': trSummary,
+        'tr_body': trBody,
         'image_url': imageUrl,
         'source': source,
         'language': language,
         'published_at': publishedAt.toUtc().toIso8601String(),
       };
 
-  NewsArticle withBody(String body) => NewsArticle(
+  NewsArticle withFull(NewsArticle full) => NewsArticle(
         id: id,
         url: url,
-        title: title,
-        summary: summary,
-        body: body,
+        originalTitle: originalTitle,
+        originalSummary: originalSummary,
+        originalBody: full.originalBody,
+        trTitle: trTitle ?? full.trTitle,
+        trSummary: trSummary ?? full.trSummary,
+        trBody: full.trBody,
         imageUrl: imageUrl,
         source: source,
         language: language,
@@ -332,37 +369,64 @@ class WasteScan {
     required this.id,
     this.imagePath,
     required this.category,
-    required this.item,
-    required this.material,
+    required String item,
+    required String material,
     required this.confidence,
-    required this.reason,
-    required this.decomposeTime,
-    required this.disposal,
-    required this.tip,
+    required String reason,
+    required String decomposeTime,
+    required String disposal,
+    required String tip,
+    this.i18n = const {},
     required this.recyclable,
     required this.createdAt,
     this.pointsAwarded = 0,
     this.disposedAt,
     this.disposalPoints = 0,
-    this.disposalFeedback = '',
-  });
+    String disposalFeedback = '',
+  })  : _item = item,
+        _material = material,
+        _reason = reason,
+        _decomposeTime = decomposeTime,
+        _disposal = disposal,
+        _tip = tip,
+        _disposalFeedback = disposalFeedback;
 
   final String id;
   final String? imagePath;
   final WasteCategory category;
-  final String item;
-  final String material;
+  final String _item;
+  final String _material;
   final double confidence;
-  final String reason;
-  final String decomposeTime;
-  final String disposal;
-  final String tip;
+  final String _reason;
+  final String _decomposeTime;
+  final String _disposal;
+  final String _tip;
+
+  /// Both languages: {"en": {...}, "rw": {...}, "feedback": {"en": "...", "rw": "..."}}.
+  final Map<String, dynamic> i18n;
+
+  String _t(String key, String fallback) {
+    final v = (i18n[AppLang.code] as Map?)?[key];
+    return v is String && v.isNotEmpty ? v : fallback;
+  }
+
+  String get item => _t('item', _item);
+  String get material => _t('material', _material);
+  String get reason => _t('reason', _reason);
+  String get decomposeTime => _t('decompose_time', _decomposeTime);
+  String get disposal => _t('disposal', _disposal);
+  String get tip => _t('tip', _tip);
   final bool recyclable;
   final DateTime createdAt;
   final int pointsAwarded;
   final DateTime? disposedAt;
   final int disposalPoints;
-  final String disposalFeedback;
+  final String _disposalFeedback;
+
+  String get disposalFeedback {
+    final v = (i18n['feedback'] as Map?)?[AppLang.code];
+    return v is String && v.isNotEmpty ? v : _disposalFeedback;
+  }
 
   bool get disposed => disposedAt != null;
   bool get canDispose => !disposed && category != WasteCategory.uncertain;
@@ -371,13 +435,14 @@ class WasteScan {
         id: id,
         imagePath: imagePath,
         category: category,
-        item: item,
-        material: material,
+        item: _item,
+        material: _material,
         confidence: confidence,
-        reason: reason,
-        decomposeTime: decomposeTime,
-        disposal: disposal,
-        tip: tip,
+        reason: _reason,
+        decomposeTime: _decomposeTime,
+        disposal: _disposal,
+        tip: _tip,
+        i18n: {...i18n, 'feedback': {AppLang.code: feedback}},
         recyclable: recyclable,
         createdAt: createdAt,
         pointsAwarded: pointsAwarded,
@@ -387,7 +452,7 @@ class WasteScan {
       );
 
   static const columns = 'id,image_path,category,item,material,confidence,reason,decompose_time,disposal,tip,'
-      'recyclable,created_at,disposed_at,disposal_points,disposal_feedback';
+      'recyclable,created_at,disposed_at,disposal_points,disposal_feedback,i18n';
 
   factory WasteScan.fromJson(Map<String, dynamic> j) => WasteScan(
         id: j['id'] as String,
@@ -400,6 +465,7 @@ class WasteScan {
         decomposeTime: (j['decompose_time'] as String?) ?? '',
         disposal: (j['disposal'] as String?) ?? '',
         tip: (j['tip'] as String?) ?? '',
+        i18n: Map<String, dynamic>.from((j['i18n'] as Map?) ?? const {}),
         recyclable: j['recyclable'] == true,
         createdAt: _date(j['created_at']),
         pointsAwarded: _int(j['points_awarded']),
@@ -501,7 +567,7 @@ class CommunityPost {
         ratingCount: _int(j['rating_count']),
         ratingTotal: _int(j['rating_total']),
         createdAt: _date(j['created_at']),
-        authorName: (j['author_name'] as String?) ?? 'EcoFun member',
+        authorName: memberName(j['author_name'] as String?),
         authorAvatar: j['author_avatar'] as String?,
         myRating: j['my_rating'] == null ? null : _int(j['my_rating']),
         commentCount: _int(j['comment_count']),
@@ -535,7 +601,7 @@ class PostComment {
         userId: j['user_id'] as String,
         body: (j['body'] as String?) ?? '',
         createdAt: _date(j['created_at']),
-        authorName: (j['author_name'] as String?) ?? 'EcoFun member',
+        authorName: memberName(j['author_name'] as String?),
         authorAvatar: j['author_avatar'] as String?,
       );
 }
@@ -664,7 +730,7 @@ class AdminUser {
 
   factory AdminUser.fromJson(Map<String, dynamic> j) => AdminUser(
         id: j['id'] as String,
-        fullName: (j['full_name'] as String?) ?? 'EcoFun member',
+        fullName: memberName(j['full_name'] as String?),
         email: (j['email'] as String?) ?? '',
         points: _int(j['points']),
         createdAt: _date(j['created_at']),

@@ -9,6 +9,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/utils/format.dart';
 import '../../core/utils/image_utils.dart';
+import '../../core/utils/language.dart';
 import '../../core/utils/photo_picker.dart';
 import '../../core/widgets/cards.dart';
 import '../../core/widgets/fields.dart';
@@ -147,7 +148,7 @@ class _ProfileViewState extends State<ProfileView> {
             Text('profile.language'.tr(), style: AppText.headline),
             const SizedBox(height: 14),
             GroupedSection(children: [
-              for (final (code, country, label, flag) in const [
+              for (final (code, _, label, flag) in const [
                 ('en', 'US', 'English', '🇬🇧'),
                 ('rw', 'RW', 'Ikinyarwanda', '🇷🇼'),
               ])
@@ -159,11 +160,7 @@ class _ProfileViewState extends State<ProfileView> {
                   onTap: () async {
                     Navigator.pop(ctx);
                     if (current == code) return;
-                    final locale = Locale(code, country);
-                    await context.setLocale(locale);
-                    Get.updateLocale(locale);
-                    session.language.value = code;
-                    session.refreshHome();
+                    await applyLanguage(context, code);
                   },
                 ),
             ]),

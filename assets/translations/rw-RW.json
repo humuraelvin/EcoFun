@@ -17,7 +17,8 @@
     "no": "Oya",
     "pts": "amanota",
     "points": "amanota",
-    "next": "Komeza"
+    "next": "Komeza",
+    "member": "Umunyamuryango wa EcoFun"
   },
   "time": {
     "now": "Ubu nyine",
@@ -142,7 +143,8 @@
     "quizReady": "Witeguye kwisuzuma ku byo wize?",
     "takeQuiz": "Subiza ibibazo",
     "quizTitle": "Isuzume ku byo uzi",
-    "quizOptional": "Ni ubushake: ibibazo 10 byihuse ku bidukikije."
+    "quizOptional": "Ni ubushake: ibibazo 10 byihuse ku bidukikije.",
+    "translated": "Byahinduwe na EcoFun"
   },
   "quiz": {
     "title": "Ibibazo ku bidukikije",
@@ -527,5 +529,16 @@
     "now": "Vugurura ubu",
     "later": "Nyuma",
     "hint": "Verisiyo nshya irakururwa muri mushakisha yawe. Yifungure ukande Install — konti yawe ikomeza kwinjira."
+  },
+  "onboarding": {
+    "skip": "Simbuka",
+    "next": "Komeza",
+    "start": "Tangira",
+    "learnTitle": "Iga buri munsi",
+    "learnBody": "Soma amakuru y'ibidukikije yo mu Rwanda kandi usubize ibibazo bigufi bigufasha kwita ku bidukikije.",
+    "scanTitle": "Suzuma, tandukanya, ubone amanota",
+    "scanBody": "Erekeza kamera ku myanda iyo ari yo yose. EcoFun ikubwira uko wayijugunya — kandi ubona amanota iyo ubikoze neza.",
+    "communityTitle": "Dufatanye",
+    "communityBody": "Kora igikorwa gito cyo kurengera ikirere buri munsi, sangiza amafoto, ushime ibyabandi kandi uzamuke ku rutonde."
   }
 }

@@ -1,11 +1,10 @@
 import 'package:easy_localization/easy_localization.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart' hide Trans;
 
 import '../core/theme/app_theme.dart';
+import '../core/utils/app_lang.dart';
 import '../core/utils/update_checker.dart';
 import '../core/widgets/system_bars.dart';
 import '../data/supa.dart';
@@ -13,6 +12,7 @@ import 'app_prefs.dart';
 import 'news_controller.dart';
 import 'notification_controller.dart';
 import 'routes.dart';
+import 'rw_localizations.dart';
 import 'session_controller.dart';
 
 class EcoFunApp extends StatelessWidget {
@@ -25,6 +25,7 @@ class EcoFunApp extends StatelessWidget {
         ? SessionController.to
         : Get.put(SessionController(), permanent: true);
     final lang = context.locale.languageCode == 'rw' ? 'rw' : 'en';
+    AppLang.code = lang; // every model getter and server call reads the language from here
     if (session.language.value != lang) {
       // Never mutate reactive state during build; apply right after this frame.
       if (!Get.isRegistered<NewsController>()) {
@@ -44,18 +45,20 @@ class EcoFunApp extends StatelessWidget {
       supportedLocales: context.supportedLocales,
       localizationsDelegates: [
         ...context.localizationDelegates,
-        const _FallbackMaterialLocalizations(),
-        const _FallbackCupertinoLocalizations(),
+        RwMaterialLocalizations.delegate,
+        RwCupertinoLocalizations.delegate,
       ],
       defaultTransition: Transition.cupertino,
       transitionDuration: const Duration(milliseconds: 380),
       popGesture: true,
       getPages: Routes.pages,
-      initialRoute: !signedIn
-          ? Routes.login
-          : AppPrefs.isAdmin
-              ? Routes.admin
-              : Routes.shell,
+      initialRoute: !AppPrefs.onboarded
+          ? Routes.welcome
+          : !signedIn
+              ? Routes.login
+              : AppPrefs.isAdmin
+                  ? Routes.admin
+                  : Routes.shell,
       onInit: () {
         Get.put(NewsController(), permanent: true);
         Get.put(NotificationController(), permanent: true);
@@ -77,26 +80,4 @@ class EcoFunApp extends StatelessWidget {
       },
     );
   }
-}
-
-/// Flutter ships no Material/Cupertino strings for Kinyarwanda. Without these
-/// fallbacks, text fields and dialogs crash when the app language is rw.
-class _FallbackMaterialLocalizations extends LocalizationsDelegate<MaterialLocalizations> {
-  const _FallbackMaterialLocalizations();
-  @override
-  bool isSupported(Locale locale) => locale.languageCode == 'rw';
-  @override
-  Future<MaterialLocalizations> load(Locale locale) => SynchronousFuture(const DefaultMaterialLocalizations());
-  @override
-  bool shouldReload(covariant LocalizationsDelegate<MaterialLocalizations> old) => false;
-}
-
-class _FallbackCupertinoLocalizations extends LocalizationsDelegate<CupertinoLocalizations> {
-  const _FallbackCupertinoLocalizations();
-  @override
-  bool isSupported(Locale locale) => locale.languageCode == 'rw';
-  @override
-  Future<CupertinoLocalizations> load(Locale locale) => SynchronousFuture(const DefaultCupertinoLocalizations());
-  @override
-  bool shouldReload(covariant LocalizationsDelegate<CupertinoLocalizations> old) => false;
 }
