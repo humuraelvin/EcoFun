@@ -74,7 +74,7 @@ rm -f "$tmp"
 
 echo "▸ Deploying the ecofun-mailer Edge Function"
 SUPABASE_ACCESS_TOKEN="$SUPABASE_ACCESS_TOKEN" npx -y supabase@latest functions deploy ecofun-mailer \
-  --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api
+  --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt --use-api --yes
 echo "  ✓ deployed"
 
 echo "▸ Building the auth email templates"
