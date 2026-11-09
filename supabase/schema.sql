@@ -103,45 +103,47 @@ create table if not exists public.quiz_bank (
   explanation    text not null default ''
 );
 
-create table if not exists public.quizzes (
-  id          uuid primary key default gen_random_uuid(),
-  article_id  text,
-  language    text not null default 'en',
-  source      text not null check (source in ('ai', 'bank')),
-  created_at  timestamptz not null default now()
+-- The question pool: AI writes environment questions in English, Google Translate adds Kinyarwanda.
+create table if not exists public.quiz_pool (
+  id              bigint generated always as identity primary key,
+  topic           text not null,
+  difficulty      text not null default 'medium' check (difficulty in ('easy', 'medium', 'hard')),
+  question_en     text not null,
+  choices_en      text[] not null check (array_length(choices_en, 1) = 4),
+  explanation_en  text not null default '',
+  question_rw     text,
+  choices_rw      text[] check (choices_rw is null or array_length(choices_rw, 1) = 4),
+  explanation_rw  text,
+  answer          integer not null check (answer between 0 and 3),
+  source          text not null default 'ai',
+  fingerprint     text not null unique,
+  created_at      timestamptz not null default now()
 );
-create unique index if not exists quizzes_article_lang_idx on public.quizzes (article_id, language);
+create index if not exists quiz_pool_rw_idx on public.quiz_pool (id) where question_rw is not null;
 
-create table if not exists public.quiz_questions (
-  quiz_id        uuid not null references public.quizzes (id) on delete cascade,
-  position       integer not null,
-  question       text not null,
-  options        text[] not null check (array_length(options, 1) = 4),
-  correct_index  integer not null check (correct_index between 0 and 3),
-  explanation    text not null default '',
-  primary key (quiz_id, position)
-);
-
-create table if not exists public.quiz_answers (
-  user_id     uuid not null references public.profiles (id) on delete cascade,
-  quiz_id     uuid not null references public.quizzes (id) on delete cascade,
-  position    integer not null,
-  choice      integer not null check (choice between 0 and 3),
-  correct     boolean not null,
-  created_at  timestamptz not null default now(),
-  primary key (user_id, quiz_id, position)
-);
-
-create table if not exists public.quiz_attempts (
+create table if not exists public.quiz_sessions (
+  id              uuid primary key default gen_random_uuid(),
   user_id         uuid not null references public.profiles (id) on delete cascade,
-  day             date not null,
-  quiz_id         uuid not null references public.quizzes (id) on delete cascade,
-  score           integer not null,
-  total           integer not null,
-  points_awarded  integer not null,
+  language        text not null default 'en' check (language in ('en', 'rw')),
   created_at      timestamptz not null default now(),
-  primary key (user_id, day)
+  finished_at     timestamptz,
+  score           integer,
+  total           integer,
+  scored          boolean not null default false,
+  points_awarded  integer not null default 0
 );
+create index if not exists quiz_sessions_user_idx on public.quiz_sessions (user_id, created_at desc);
+
+create table if not exists public.quiz_session_items (
+  session_id   uuid not null references public.quiz_sessions (id) on delete cascade,
+  position     integer not null,
+  pool_id      bigint not null references public.quiz_pool (id) on delete cascade,
+  choice       integer check (choice between 0 and 3),
+  correct      boolean,
+  answered_at  timestamptz,
+  primary key (session_id, position)
+);
+create index if not exists quiz_session_items_pool_idx on public.quiz_session_items (pool_id);
 
 create table if not exists public.missions (
   id              serial primary key,
@@ -206,6 +208,58 @@ create table if not exists public.post_ratings (
   primary key (post_id, user_id)
 );
 
+create table if not exists public.post_comments (
+  id          uuid primary key default gen_random_uuid(),
+  post_id     uuid not null references public.community_posts (id) on delete cascade,
+  user_id     uuid not null references public.profiles (id) on delete cascade,
+  body        text not null check (char_length(body) between 1 and 500),
+  created_at  timestamptz not null default now()
+);
+create index if not exists post_comments_post_idx on public.post_comments (post_id, created_at);
+
+create table if not exists public.announcements (
+  id          uuid primary key default gen_random_uuid(),
+  title_en    text not null,
+  body_en     text not null,
+  title_rw    text not null,
+  body_rw     text not null,
+  emailed     boolean not null default false,
+  recipients  integer not null default 0,
+  created_by  uuid references public.profiles (id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+
+-- In-app notifications (live through Supabase Realtime).
+--   members: rating, comment, announcement, points_granted, points_removed, post_removed, welcome
+--   admins:  new_user, user_left, new_post
+create table if not exists public.notifications (
+  id          bigint generated always as identity primary key,
+  user_id     uuid not null references public.profiles (id) on delete cascade,
+  kind        text not null,
+  actor_id    uuid references public.profiles (id) on delete set null,
+  post_id     uuid references public.community_posts (id) on delete cascade,
+  data        jsonb not null default '{}',
+  read_at     timestamptz,
+  created_at  timestamptz not null default now()
+);
+create index if not exists notifications_user_idx on public.notifications (user_id, created_at desc);
+create index if not exists notifications_unread_idx on public.notifications (user_id) where read_at is null;
+
+-- Columns added after the first release.
+alter table public.profiles add column if not exists suspended_at timestamptz;
+alter table public.profiles add column if not exists suspended_reason text;
+alter table public.community_posts add column if not exists comment_count integer not null default 0;
+alter table public.waste_scans add column if not exists disposed_at timestamptz;
+alter table public.waste_scans add column if not exists disposal_image_path text;
+alter table public.waste_scans add column if not exists disposal_feedback text;
+alter table public.waste_scans add column if not exists disposal_points integer not null default 0;
+
+-- The first release generated quizzes from news articles; those tables are replaced by the pool above.
+drop function if exists public._quiz_from_ai(public.news_articles, text);
+drop function if exists public._quiz_from_bank(text, text);
+drop function if exists public._quiz_payload(uuid, uuid);
+drop table if exists public.quiz_answers, public.quiz_attempts, public.quiz_questions, public.quizzes cascade;
+
 -- ----------------------------------------------------------------------------
 -- 3. Row level security
 --    Clients may read what they need and edit only their own name/avatar.
@@ -218,15 +272,17 @@ alter table public.news_articles        enable row level security;
 alter table public.news_reads           enable row level security;
 alter table public.daily_progress       enable row level security;
 alter table public.quiz_bank            enable row level security;
-alter table public.quizzes              enable row level security;
-alter table public.quiz_questions       enable row level security;
-alter table public.quiz_answers         enable row level security;
-alter table public.quiz_attempts        enable row level security;
+alter table public.quiz_pool            enable row level security;
+alter table public.quiz_sessions        enable row level security;
+alter table public.quiz_session_items   enable row level security;
 alter table public.missions             enable row level security;
 alter table public.waste_scans          enable row level security;
 alter table public.mission_completions  enable row level security;
 alter table public.community_posts      enable row level security;
 alter table public.post_ratings         enable row level security;
+alter table public.post_comments        enable row level security;
+alter table public.announcements        enable row level security;
+alter table public.notifications        enable row level security;
 
 drop policy if exists "profiles readable" on public.profiles;
 create policy "profiles readable" on public.profiles for select to authenticated using (true);
@@ -248,8 +304,6 @@ create policy "own news reads" on public.news_reads for select to authenticated 
 drop policy if exists "own progress" on public.daily_progress;
 create policy "own progress" on public.daily_progress for select to authenticated using (user_id = (select auth.uid()));
 
-drop policy if exists "own attempts" on public.quiz_attempts;
-create policy "own attempts" on public.quiz_attempts for select to authenticated using (user_id = (select auth.uid()));
 
 drop policy if exists "missions readable" on public.missions;
 create policy "missions readable" on public.missions for select to authenticated using (true);
@@ -269,7 +323,15 @@ create policy "delete own posts" on public.community_posts for delete to authent
 
 drop policy if exists "own ratings" on public.post_ratings;
 create policy "own ratings" on public.post_ratings for select to authenticated using (user_id = (select auth.uid()));
--- quiz_bank, quizzes, quiz_questions, quiz_answers, news_sources: no client policies (answers stay secret).
+drop policy if exists "comments readable" on public.post_comments;
+create policy "comments readable" on public.post_comments for select to authenticated using (true);
+
+drop policy if exists "announcements readable" on public.announcements;
+create policy "announcements readable" on public.announcements for select to authenticated using (true);
+
+drop policy if exists "own notifications" on public.notifications;
+create policy "own notifications" on public.notifications for select to authenticated using (user_id = (select auth.uid()));
+-- quiz_bank, quiz_pool, quiz_sessions, quiz_session_items, news_sources: no client policies (answers stay secret).
 
 -- ----------------------------------------------------------------------------
 -- 4. Storage buckets + policies (files live under <bucket>/<user id>/...)
@@ -282,11 +344,24 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 on conflict (id) do update set public = excluded.public,
   file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
+-- Used by storage policies and the app; true only for admins.
+create or replace function public.is_admin()
+returns boolean language sql stable security definer set search_path = '' as $$
+  select coalesce((select is_admin and suspended_at is null from public.profiles where id = auth.uid()), false);
+$$;
+
 -- Policies from the app's earlier name (EcoStep), if an older version of this script ran.
 drop policy if exists "ecostep upload own folder" on storage.objects;
 drop policy if exists "ecostep update own avatar" on storage.objects;
 drop policy if exists "ecostep read own private" on storage.objects;
 drop policy if exists "ecostep delete own files" on storage.objects;
+
+drop policy if exists "ecofun admin read all" on storage.objects;
+create policy "ecofun admin read all" on storage.objects for select to authenticated
+  using (bucket_id in ('missions', 'scans', 'community', 'avatars') and public.is_admin());
+drop policy if exists "ecofun admin delete all" on storage.objects;
+create policy "ecofun admin delete all" on storage.objects for delete to authenticated
+  using (bucket_id in ('missions', 'scans', 'community', 'avatars') and public.is_admin());
 
 drop policy if exists "ecofun upload own folder" on storage.objects;
 create policy "ecofun upload own folder" on storage.objects for insert to authenticated
@@ -310,31 +385,48 @@ create policy "ecofun delete own files" on storage.objects for delete to authent
 -- ----------------------------------------------------------------------------
 -- 5. New-user profile trigger
 -- ----------------------------------------------------------------------------
+-- A member exists in EcoFun only after verifying their email with the code.
+-- (Supabase keeps the unverified sign-up in auth.users until then; it is purged after an hour.)
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = '' as $$
+declare v_name text;
 begin
+  if new.email_confirmed_at is null then return new; end if;
+  if tg_op = 'UPDATE' and old.email_confirmed_at is not null then return new; end if;
+  v_name := public._display_name(coalesce(new.raw_user_meta_data, '{}'), new.email);
   insert into public.profiles (id, full_name, avatar_url)
-  values (
-    new.id,
-    left(coalesce(nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''),
-                  nullif(trim(new.raw_user_meta_data ->> 'name'), ''),
-                  split_part(new.email, '@', 1),
-                  'EcoFun member'), 80),
-    coalesce(new.raw_user_meta_data ->> 'avatar_url', new.raw_user_meta_data ->> 'picture')
-  )
+  values (new.id, v_name, coalesce(new.raw_user_meta_data ->> 'avatar_url', new.raw_user_meta_data ->> 'picture'))
   on conflict (id) do nothing;
+  if found then
+    perform public._notify(new.id, 'welcome', null, null, '{}');
+    perform public._notify_admins('new_user', new.id, null, jsonb_build_object('name', v_name, 'email', new.email));
+  end if;
   return new;
 end;
 $$;
 
 drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created after insert on auth.users
+create trigger on_auth_user_created after insert or update of email_confirmed_at on auth.users
   for each row execute function public.handle_new_user();
 
--- Backfill profiles for accounts created before this script ran.
+-- Remove unfinished sign-ups (profiles of unverified accounts, and the accounts themselves after 1 hour).
+delete from public.profiles p using auth.users u where u.id = p.id and u.email_confirmed_at is null;
+
+create or replace function public._purge_unverified()
+returns integer language plpgsql volatile security definer set search_path = '' as $$
+declare n integer;
+begin
+  delete from auth.users where email_confirmed_at is null and created_at < now() - interval '1 hour';
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+-- Backfill profiles for verified accounts created before this script ran.
 insert into public.profiles (id, full_name)
 select u.id, left(coalesce(nullif(trim(u.raw_user_meta_data ->> 'full_name'), ''), split_part(u.email, '@', 1), 'EcoFun member'), 80)
 from auth.users u
+where u.email_confirmed_at is not null
 on conflict (id) do nothing;
 -- Default names from the app's earlier name.
 update public.profiles set full_name = 'EcoFun member' where full_name = 'EcoStep member';
@@ -356,11 +448,84 @@ create trigger profiles_touch before update on public.profiles
 -- 6. Internal helpers (not callable by app users)
 -- ----------------------------------------------------------------------------
 create or replace function public._require_user()
-returns uuid language plpgsql stable set search_path = '' as $$
-declare uid uuid := auth.uid();
+returns uuid language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := auth.uid(); v_suspended timestamptz;
 begin
   if uid is null then raise exception 'Sign in to continue.' using errcode = '28000'; end if;
+  select suspended_at into v_suspended from public.profiles where id = uid;
+  if v_suspended is not null then
+    raise exception 'Your account has been suspended.' using errcode = '42501';
+  end if;
   return uid;
+end;
+$$;
+
+create or replace function public._require_admin()
+returns uuid language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := public._require_user();
+begin
+  if not coalesce((select is_admin from public.profiles where id = uid), false) then
+    raise exception 'Admin access is required.' using errcode = '42501';
+  end if;
+  return uid;
+end;
+$$;
+
+-- In-app notification (never to yourself). Never raises.
+create or replace function public._notify(p_user uuid, p_kind text, p_actor uuid default null,
+                                          p_post uuid default null, p_data jsonb default '{}')
+returns void language plpgsql volatile security definer set search_path = '' as $$
+begin
+  if p_user is null or p_user = p_actor then return; end if;
+  insert into public.notifications (user_id, kind, actor_id, post_id, data)
+  values (p_user, p_kind, p_actor, p_post, coalesce(p_data, '{}'));
+exception when others then
+  raise warning 'EcoFun notification (%) failed: %', p_kind, sqlerrm;
+end;
+$$;
+
+create or replace function public._notify_admins(p_kind text, p_actor uuid default null,
+                                                 p_post uuid default null, p_data jsonb default '{}')
+returns void language plpgsql volatile security definer set search_path = '' as $$
+begin
+  insert into public.notifications (user_id, kind, actor_id, post_id, data)
+  select id, p_kind, p_actor, p_post, coalesce(p_data, '{}') from public.profiles
+  where is_admin and id is distinct from p_actor;
+exception when others then
+  raise warning 'EcoFun admin notification (%) failed: %', p_kind, sqlerrm;
+end;
+$$;
+
+-- Google Translate (en <-> rw). Translates a list of short texts in one request; returns null on failure.
+create or replace function public._translate(p_texts text[], p_from text, p_to text)
+returns text[] language plpgsql volatile security definer set search_path = '' as $$
+declare
+  resp    record;
+  joined  text;
+  out     text := '';
+  seg     jsonb;
+  parts   text[];
+begin
+  if p_texts is null or array_length(p_texts, 1) is null then return p_texts; end if;
+  joined := array_to_string(array(select regexp_replace(coalesce(t, ''), '\s*[\r\n]+\s*', ' ', 'g') from unnest(p_texts) t), E'\n');
+  perform extensions.http_set_curlopt('CURLOPT_TIMEOUT', '20');
+  select status, content as c into resp from extensions.http((
+    'POST',
+    'https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&sl=' || p_from || '&tl=' || p_to,
+    array[extensions.http_header('User-Agent', 'Mozilla/5.0 (Linux; Android 14) EcoFun/1.0')],
+    'application/x-www-form-urlencoded',
+    'q=' || extensions.urlencode(joined)
+  )::extensions.http_request);
+  if resp.status <> 200 then return null; end if;
+  for seg in select * from jsonb_array_elements((resp.c::jsonb) -> 0) loop
+    out := out || coalesce(seg ->> 0, '');
+  end loop;
+  parts := regexp_split_to_array(out, E'\s*\n\s*');
+  if array_length(parts, 1) <> array_length(p_texts, 1) then return null; end if;
+  return array(select btrim(x) from unnest(parts) x);
+exception when others then
+  raise warning 'EcoFun translate failed: %', sqlerrm;
+  return null;
 end;
 $$;
 
@@ -653,6 +818,7 @@ begin
     'today', today,
     'profile', jsonb_build_object('id', prof.id, 'full_name', prof.full_name, 'avatar_url', prof.avatar_url,
                                   'points', prof.points, 'is_admin', prof.is_admin),
+    'unread_notifications', (select count(*) from public.notifications where user_id = uid and read_at is null),
     'streak', public._streak(uid),
     'week', week,
     'progress', jsonb_build_object(
@@ -669,7 +835,7 @@ begin
     'stats', jsonb_build_object(
       'missions', (select count(*) from public.mission_completions where user_id = uid),
       'scans', (select count(*) from public.waste_scans where user_id = uid),
-      'quizzes', (select count(*) from public.quiz_attempts where user_id = uid),
+      'quizzes', (select count(*) from public.quiz_sessions where user_id = uid and finished_at is not null),
       'articles', (select count(*) from public.news_reads where user_id = uid))
   );
 end;
@@ -688,132 +854,216 @@ begin
   insert into public.daily_progress (user_id, day, article_id, news_read_at)
   values (uid, today, p_article_id, now())
   on conflict (user_id, day) do update set
-    -- the quiz follows the story read today, until the quiz is started
-    article_id = case when public.daily_progress.quiz_id is null then excluded.article_id else public.daily_progress.article_id end,
+    article_id = coalesce(public.daily_progress.article_id, excluded.article_id),
     news_read_at = coalesce(public.daily_progress.news_read_at, now());
   return public.get_home();
 end;
 $$;
 
 -- ----------------------------------------------------------------------------
--- 9. Quiz — questions written by AI from the article, graded only on the server
+-- 9. Quizzes — open any time, 10 environment questions, graded only on the server
+--    The pool grows by itself: every few minutes AI writes 10 new English questions on a
+--    random topic and Google Translate adds the Kinyarwanda version.
 -- ----------------------------------------------------------------------------
-create or replace function public._quiz_from_bank(p_language text, p_seed text)
-returns uuid language plpgsql volatile security definer set search_path = '' as $$
-declare qid uuid; lang text := p_language;
-begin
-  if (select count(*) from public.quiz_bank where language = lang) < 5 then lang := 'en'; end if;
-  insert into public.quizzes (article_id, language, source) values (null, p_language, 'bank') returning id into qid;
-  insert into public.quiz_questions (quiz_id, position, question, options, correct_index, explanation)
-  select qid, row_number() over () - 1, question, options, correct_index, explanation
-  from (select * from public.quiz_bank where language = lang order by md5(p_seed || id::text) limit 5) b;
-  return qid;
-end;
+create or replace function public._quiz_topics()
+returns text[] language sql immutable set search_path = '' as $$
+  select array[
+    'climate change basics', 'greenhouse gases and the greenhouse effect', 'weather versus climate',
+    'carbon footprint of everyday life', 'renewable energy', 'solar power in Rwanda and Africa',
+    'hydropower and dams', 'wind and geothermal energy', 'methane gas in Lake Kivu',
+    'energy saving at home', 'clean cooking stoves and charcoal use', 'electric motorbikes and clean transport in Kigali',
+    'air pollution and health', 'Kigali car-free days', 'plastic pollution', 'Rwanda''s plastic bag ban',
+    'recycling and the circular economy', 'composting and organic waste', 'electronic waste and batteries',
+    'hazardous household waste', 'reduce, reuse, recycle habits', 'food waste', 'fashion and textile waste',
+    'water conservation', 'rainwater harvesting', 'clean water and sanitation', 'rivers and lakes of Rwanda',
+    'wetlands and Nyandungu eco-park', 'Lake Victoria and the Nile basin', 'forests and deforestation',
+    'Nyungwe National Park', 'Akagera National Park', 'Volcanoes National Park and mountain gorillas',
+    'Gishwati-Mukura National Park', 'tree planting and national tree planting day', 'agroforestry and bamboo',
+    'soil erosion and terraces', 'landslides and floods', 'droughts and climate adaptation',
+    'sustainable farming and fertilisers', 'pollinators and bees', 'biodiversity and endangered species',
+    'invasive species such as water hyacinth', 'wildlife protection and poaching', 'birds of Rwanda',
+    'Umuganda community work', 'green cities and urban planning', 'green buildings',
+    'Rwanda Green Fund and climate finance', 'the Paris Agreement and COP climate summits',
+    'oceans, coral reefs and sea level rise', 'glaciers and polar ice', 'the ozone layer', 'deserts and desertification',
+    'carbon sinks such as forests, soils and peatlands', 'mining and the environment', 'urban heat and shade trees',
+    'environmental science vocabulary', 'famous environmental scientists and activists', 'climate myths and facts',
+    'sustainable diets and local food', 'environmental laws and protected areas', 'eco-friendly tourism',
+    'the water cycle', 'the carbon cycle', 'ecosystems and food chains', 'environment and human health',
+    'disaster preparedness for storms and floods', 'sustainable fishing', 'noise and light pollution',
+    'household chemicals and safe alternatives', 'clean energy jobs and green skills', 'climate action by young people'
+  ];
 $$;
 
-create or replace function public._quiz_from_ai(p_article public.news_articles, p_language text)
-returns uuid language plpgsql volatile security definer set search_path = '' as $$
+create or replace function public._quiz_fingerprint(p_question text)
+returns text language sql immutable set search_path = '' as $$
+  select md5(regexp_replace(lower(coalesce(p_question, '')), '[^a-z0-9]', '', 'g'));
+$$;
+
+-- Writes one batch (up to 10 questions) into the pool. Returns how many new questions were saved.
+create or replace function public._quiz_pool_fill()
+returns integer language plpgsql volatile security definer set search_path = '' as $$
 declare
-  qid     uuid;
-  result  jsonb;
-  q       jsonb;
-  pos     integer := 0;
-  lang_name text := case when p_language = 'rw' then 'Kinyarwanda (simple, clear, natural Kinyarwanda used in Rwanda)' else 'English' end;
+  topics   text[] := public._quiz_topics();
+  topic    text := topics[1 + floor(random() * array_length(topics, 1))::integer];
+  angle    text := (array['surprising facts', 'everyday actions people can take', 'examples from Rwanda and East Africa',
+                          'the science behind it', 'common myths versus facts', 'numbers, dates and records',
+                          'causes and effects', 'solutions and innovations'])[1 + floor(random() * 8)::integer];
+  diff     text := (array['easy', 'easy', 'medium', 'medium', 'hard'])[1 + floor(random() * 5)::integer];
+  result   jsonb;
+  q        jsonb;
+  qs       jsonb[] := '{}';
+  texts    text[] := '{}';
+  rw       text[];
+  n        integer := 0;
+  saved    integer := 0;
+  choices  text[];
+  k        integer;
 begin
   result := public._nvidia_chat(
     'nvidia/nemotron-3.5-lightning-30b-a3b',
     jsonb_build_array(
       jsonb_build_object('role', 'system', 'content',
-        'You write short, fair multiple-choice quizzes for EcoFun, a climate-education app for people in Rwanda. ' ||
-        'Every question must be answerable from the article text. Exactly one option is correct; the other three are plausible but clearly wrong. ' ||
-        'Vary the position of the correct option. Never ask about the author, the website or publication dates. Reply with JSON only.'),
+        'You write accurate, interesting multiple-choice quiz questions about the environment and climate for EcoFun, ' ||
+        'an app for people in Rwanda. Facts must be correct and widely accepted. Each question has exactly 4 short options, ' ||
+        'exactly one correct. Wrong options must be plausible. Vary which option is correct. Keep questions under 25 words ' ||
+        'and options under 8 words. Never refer to "the text" or "the article". Reply with JSON only.'),
       jsonb_build_object('role', 'user', 'content',
-        'Write 5 questions in ' || lang_name || ' about this article. ' ||
-        'Return {"questions":[{"question":"...","options":["...","...","...","..."],"correct_index":0,"explanation":"one short sentence"}]}' ||
-        E'\n\nTitle: ' || p_article.title || E'\n\nArticle:\n' || left(p_article.body, 6000))),
-    1800, 0.3);
+        'Write 10 ' || diff || ' questions about "' || topic || '", focusing on ' || angle || '. Random seed: ' ||
+        floor(random() * 1000000)::text || '. Return {"questions":[{"question":"...","options":["...","...","...","..."],' ||
+        '"correct_index":0,"explanation":"one short sentence"}]}')),
+    3000, 0.9);
 
-  if jsonb_typeof(result -> 'questions') <> 'array' or jsonb_array_length(result -> 'questions') < 3 then
-    raise exception 'AI quiz had too few questions';
-  end if;
-
-  insert into public.quizzes (article_id, language, source) values (p_article.id, p_language, 'ai')
-  on conflict (article_id, language) do nothing returning id into qid;
-  if qid is null then   -- someone else generated it a moment ago
-    select id into qid from public.quizzes where article_id = p_article.id and language = p_language;
-    return qid;
-  end if;
-
-  for q in select * from jsonb_array_elements(result -> 'questions') loop
-    exit when pos >= 5;
+  for q in select * from jsonb_array_elements(coalesce(result -> 'questions', '[]'::jsonb)) loop
+    exit when n >= 10;
     if jsonb_typeof(q -> 'options') = 'array' and jsonb_array_length(q -> 'options') = 4
-       and (q ->> 'correct_index') ~ '^[0-3]$' and length(coalesce(q ->> 'question', '')) between 5 and 400 then
-      insert into public.quiz_questions (quiz_id, position, question, options, correct_index, explanation)
-      values (qid, pos, q ->> 'question',
-              array(select left(x, 200) from jsonb_array_elements_text(q -> 'options') x),
-              (q ->> 'correct_index')::integer, left(coalesce(q ->> 'explanation', ''), 400));
-      pos := pos + 1;
+       and (q ->> 'correct_index') ~ '^[0-3]$'
+       and char_length(coalesce(q ->> 'question', '')) between 10 and 300
+       -- four distinct, non-empty options that don't start mid-sentence
+       and (select count(distinct lower(btrim(x))) from jsonb_array_elements_text(q -> 'options') x) = 4
+       and not exists (select 1 from jsonb_array_elements_text(q -> 'options') x
+                       where char_length(btrim(x)) < 1 or x ~ '^\s')
+       and not exists (select 1 from public.quiz_pool where fingerprint = public._quiz_fingerprint(q ->> 'question')) then
+      qs := qs || q;
+      texts := texts || array[btrim(q ->> 'question')] || array(select left(btrim(x), 120) from jsonb_array_elements_text(q -> 'options') x)
+                     || array[left(coalesce(q ->> 'explanation', ''), 300)];
+      n := n + 1;
     end if;
   end loop;
+  if n = 0 then return 0; end if;
 
-  if pos < 3 then raise exception 'AI quiz questions were malformed'; end if;
-  return qid;
+  rw := public._translate(texts, 'en', 'rw');   -- 6 texts per question, in order
+
+  for k in 1 .. n loop
+    q := qs[k];
+    choices := array(select left(btrim(x), 120) from jsonb_array_elements_text(q -> 'options') x);
+    insert into public.quiz_pool (topic, difficulty, question_en, choices_en, explanation_en,
+                                  question_rw, choices_rw, explanation_rw, answer, fingerprint)
+    values (topic, diff, q ->> 'question', choices, left(coalesce(q ->> 'explanation', ''), 300),
+            case when rw is not null then rw[(k - 1) * 6 + 1] end,
+            case when rw is not null then rw[(k - 1) * 6 + 2 : (k - 1) * 6 + 5] end,
+            case when rw is not null then rw[(k - 1) * 6 + 6] end,
+            (q ->> 'correct_index')::integer, public._quiz_fingerprint(q ->> 'question'))
+    on conflict (fingerprint) do nothing;
+    if found then saved := saved + 1; end if;
+  end loop;
+  return saved;
 end;
 $$;
 
-create or replace function public._quiz_payload(p_quiz uuid, p_user uuid)
-returns jsonb language sql stable security definer set search_path = '' as $$
-  select jsonb_build_object(
-    'quiz_id', p_quiz,
-    'source', (select source from public.quizzes where id = p_quiz),
-    'questions', coalesce((
-      select jsonb_agg(jsonb_build_object(
-        'position', q.position, 'question', q.question, 'options', to_jsonb(q.options),
-        'answer', case when a.user_id is null then null else jsonb_build_object(
-          'choice', a.choice, 'correct', a.correct, 'correct_index', q.correct_index, 'explanation', q.explanation) end)
-        order by q.position)
-      from public.quiz_questions q
-      left join public.quiz_answers a on a.quiz_id = q.quiz_id and a.position = q.position and a.user_id = p_user
-      where q.quiz_id = p_quiz), '[]'::jsonb));
+-- Cron: one batch every few minutes; also re-translates questions whose translation failed.
+create or replace function public._quiz_pool_tick()
+returns void language plpgsql volatile security definer set search_path = '' as $$
+declare r record; rw text[];
+begin
+  if (select count(*) from public.quiz_pool) < 200000 then
+    begin
+      perform public._quiz_pool_fill();
+    exception when others then
+      raise warning 'EcoFun quiz pool fill failed: %', sqlerrm;
+    end;
+  end if;
+  for r in select * from public.quiz_pool where question_rw is null order by id limit 10 loop
+    rw := public._translate(array[r.question_en] || r.choices_en || array[r.explanation_en], 'en', 'rw');
+    exit when rw is null;
+    update public.quiz_pool set question_rw = rw[1], choices_rw = rw[2:5], explanation_rw = rw[6] where id = r.id;
+  end loop;
+end;
 $$;
 
+
+create or replace function public._quiz_payload(p_session uuid)
+returns jsonb language sql stable security definer set search_path = '' as $$
+  select jsonb_build_object(
+    'quiz_id', s.id,
+    'language', s.language,
+    'questions', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'position', i.position,
+        'question', case when s.language = 'rw' and p.question_rw is not null then p.question_rw else p.question_en end,
+        'options', to_jsonb(case when s.language = 'rw' and p.choices_rw is not null then p.choices_rw else p.choices_en end),
+        'topic', p.topic,
+        'answer', case when i.choice is null then null else jsonb_build_object(
+          'choice', i.choice, 'correct', i.correct, 'correct_index', p.answer,
+          'explanation', case when s.language = 'rw' and p.explanation_rw is not null then p.explanation_rw else p.explanation_en end) end)
+        order by i.position)
+      from public.quiz_session_items i join public.quiz_pool p on p.id = i.pool_id
+      where i.session_id = s.id), '[]'::jsonb))
+  from public.quiz_sessions s where s.id = p_session;
+$$;
+
+-- Starts (or resumes) a 10-question quiz.
 create or replace function public.get_quiz(p_language text default 'en')
 returns jsonb language plpgsql volatile security definer set search_path = '' as $$
 declare
-  uid    uuid := public._require_user();
-  today  date := public.eco_today();
-  lang   text := case when p_language = 'rw' then 'rw' else 'en' end;
-  p      public.daily_progress;
-  art    public.news_articles;
-  qid    uuid;
+  uid     uuid := public._require_user();
+  lang    text := case when p_language = 'rw' then 'rw' else 'en' end;
+  sid     uuid;
+  picked  bigint[];
+  tries   integer := 0;
+  scored_today integer;
 begin
-  select * into p from public.daily_progress where user_id = uid and day = today;
-  if p.news_read_at is null then
-    raise exception 'Read today''s story first.' using errcode = 'P0001';
-  end if;
-  if p.quiz_completed_at is not null then
-    return jsonb_build_object('completed', true, 'score', p.quiz_score, 'total', p.quiz_total);
-  end if;
+  select count(*) into scored_today from public.quiz_sessions
+  where user_id = uid and scored and (finished_at at time zone 'Africa/Kigali')::date = public.eco_today();
 
-  qid := p.quiz_id;
-  if qid is null then
-    select * into art from public.news_articles where id = p.article_id;
-    if art.id is not null then
-      select id into qid from public.quizzes where article_id = art.id and language = lang;
-      if qid is null and length(art.body) >= 200 then
-        begin
-          qid := public._quiz_from_ai(art, lang);
-        exception when others then
-          raise warning 'EcoFun AI quiz failed: %', sqlerrm;
-          qid := null;
-        end;
+  select id into sid from public.quiz_sessions
+  where user_id = uid and finished_at is null and language = lang and created_at > now() - interval '3 hours'
+  order by created_at desc limit 1;
+
+  if sid is null then
+    loop
+      -- questions this member has never seen first, then anything else
+      select array_agg(id) into picked from (
+        select p.id from public.quiz_pool p
+        where (lang = 'en' or p.question_rw is not null)
+          and not exists (select 1 from public.quiz_session_items i join public.quiz_sessions s on s.id = i.session_id
+                          where s.user_id = uid and i.pool_id = p.id)
+        order by random() limit 10) t;
+      if coalesce(array_length(picked, 1), 0) < 10 then
+        picked := coalesce(picked, '{}') || array(
+          select p.id from public.quiz_pool p
+          where (lang = 'en' or p.question_rw is not null) and p.id <> all (coalesce(picked, '{}'))
+          order by random() limit 10 - coalesce(array_length(picked, 1), 0));
       end if;
+      exit when coalesce(array_length(picked, 1), 0) >= 10 or tries >= 1;
+      tries := tries + 1;
+      begin
+        perform public._quiz_pool_fill();   -- first quizzes ever: write questions now
+      exception when others then
+        raise warning 'EcoFun quiz pool fill failed: %', sqlerrm;
+      end;
+    end loop;
+    if coalesce(array_length(picked, 1), 0) < 4 then
+      raise exception 'New quiz questions are being prepared. Please try again in a minute.' using errcode = 'P0001';
     end if;
-    if qid is null then qid := public._quiz_from_bank(lang, uid::text || today::text); end if;
-    update public.daily_progress set quiz_id = qid where user_id = uid and day = today;
+
+    insert into public.quiz_sessions (user_id, language) values (uid, lang) returning id into sid;
+    insert into public.quiz_session_items (session_id, position, pool_id)
+    select sid, ord - 1, pid from unnest(picked) with ordinality as u(pid, ord);
   end if;
 
-  return jsonb_build_object('completed', false) || public._quiz_payload(qid, uid);
+  return jsonb_build_object('completed', false, 'scored_today', scored_today, 'scored_limit', 3,
+                            'points_per_correct', 2, 'counts_for_points', scored_today < 3)
+         || public._quiz_payload(sid);
 end;
 $$;
 
@@ -821,57 +1071,65 @@ create or replace function public.answer_quiz(p_quiz_id uuid, p_position integer
 returns jsonb language plpgsql volatile security definer set search_path = '' as $$
 declare
   uid  uuid := public._require_user();
-  q    public.quiz_questions;
-  a    public.quiz_answers;
+  s    public.quiz_sessions;
+  it   public.quiz_session_items;
+  p    public.quiz_pool;
 begin
-  if not exists (select 1 from public.daily_progress where user_id = uid and day = public.eco_today() and quiz_id = p_quiz_id) then
-    raise exception 'This quiz is not available today.' using errcode = 'P0001';
+  select * into s from public.quiz_sessions where id = p_quiz_id and user_id = uid;
+  if s.id is null or s.finished_at is not null then
+    raise exception 'This quiz is no longer available. Start a new one.' using errcode = 'P0001';
   end if;
-  if p_choice not between 0 and 3 then raise exception 'Choose one of the four answers.' using errcode = 'P0001'; end if;
-  select * into q from public.quiz_questions where quiz_id = p_quiz_id and position = p_position;
-  if q.quiz_id is null then raise exception 'Question not found.' using errcode = 'P0001'; end if;
-
-  insert into public.quiz_answers (user_id, quiz_id, position, choice, correct)
-  values (uid, p_quiz_id, p_position, p_choice, p_choice = q.correct_index)
-  on conflict do nothing;
-  select * into a from public.quiz_answers where user_id = uid and quiz_id = p_quiz_id and position = p_position;
-
-  return jsonb_build_object('choice', a.choice, 'correct', a.correct, 'correct_index', q.correct_index, 'explanation', q.explanation);
+  if p_choice is null or p_choice not between 0 and 3 then raise exception 'Choose one of the four answers.' using errcode = 'P0001'; end if;
+  select * into it from public.quiz_session_items where session_id = s.id and position = p_position;
+  if it.session_id is null then raise exception 'Question not found.' using errcode = 'P0001'; end if;
+  select * into p from public.quiz_pool where id = it.pool_id;
+  if it.choice is null then
+    update public.quiz_session_items set choice = p_choice, correct = (p_choice = p.answer), answered_at = now()
+    where session_id = s.id and position = p_position returning * into it;
+  end if;
+  return jsonb_build_object('choice', it.choice, 'correct', it.correct, 'correct_index', p.answer,
+    'explanation', case when s.language = 'rw' and p.explanation_rw is not null then p.explanation_rw else p.explanation_en end);
 end;
 $$;
 
 create or replace function public.finish_quiz(p_quiz_id uuid)
 returns jsonb language plpgsql volatile security definer set search_path = '' as $$
 declare
-  uid     uuid := public._require_user();
-  today   date := public.eco_today();
-  total   integer;
-  answered integer;
-  score   integer;
-  pts     integer;
-  existing public.quiz_attempts;
+  uid      uuid := public._require_user();
+  today    date := public.eco_today();
+  s        public.quiz_sessions;
+  v_total  integer;
+  v_answered integer;
+  v_score  integer;
+  scored_today integer;
+  pts      integer := 0;
 begin
-  select * into existing from public.quiz_attempts where user_id = uid and day = today;
-  if existing.user_id is not null then
-    return jsonb_build_object('already_completed', true, 'score', existing.score, 'total', existing.total, 'points_awarded', 0);
+  select * into s from public.quiz_sessions where id = p_quiz_id and user_id = uid for update;
+  if s.id is null then raise exception 'This quiz is no longer available.' using errcode = 'P0001'; end if;
+  if s.finished_at is not null then
+    return jsonb_build_object('already_completed', true, 'score', s.score, 'total', s.total, 'points_awarded', 0);
   end if;
-  if not exists (select 1 from public.daily_progress where user_id = uid and day = today and quiz_id = p_quiz_id) then
-    raise exception 'This quiz is not available today.' using errcode = 'P0001';
-  end if;
+  select count(*), count(choice), count(*) filter (where correct) into v_total, v_answered, v_score
+  from public.quiz_session_items where session_id = s.id;
+  if v_answered < v_total then raise exception 'Answer every question first.' using errcode = 'P0001'; end if;
 
-  select count(*) into total from public.quiz_questions where quiz_id = p_quiz_id;
-  select count(*), count(*) filter (where correct) into answered, score
-  from public.quiz_answers where user_id = uid and quiz_id = p_quiz_id;
-  if answered < total then raise exception 'Answer every question first.' using errcode = 'P0001'; end if;
+  select count(*) into scored_today from public.quiz_sessions
+  where user_id = uid and scored and (finished_at at time zone 'Africa/Kigali')::date = today;
+  if scored_today < 3 then pts := v_score * 2; end if;
 
-  pts := score * 5;
-  insert into public.quiz_attempts (user_id, day, quiz_id, score, total, points_awarded)
-  values (uid, today, p_quiz_id, score, total, pts);
-  update public.daily_progress set quiz_completed_at = now(), quiz_score = score, quiz_total = total
-  where user_id = uid and day = today;
-  perform public._award_points(uid, pts, 'quiz', score || '/' || total);
+  update public.quiz_sessions set finished_at = now(), score = v_score, total = v_total,
+         scored = scored_today < 3, points_awarded = pts
+  where id = s.id;
+  insert into public.daily_progress (user_id, day, quiz_completed_at, quiz_score, quiz_total)
+  values (uid, today, now(), v_score, v_total)
+  on conflict (user_id, day) do update set
+    quiz_completed_at = coalesce(public.daily_progress.quiz_completed_at, now()),
+    quiz_score = greatest(coalesce(public.daily_progress.quiz_score, 0), excluded.quiz_score),
+    quiz_total = excluded.quiz_total;
+  perform public._award_points(uid, pts, 'quiz', v_score || '/' || v_total);
 
-  return jsonb_build_object('already_completed', false, 'score', score, 'total', total, 'points_awarded', pts);
+  return jsonb_build_object('already_completed', false, 'score', v_score, 'total', v_total, 'points_awarded', pts,
+                            'scored_left', greatest(0, 2 - scored_today));
 end;
 $$;
 
@@ -951,12 +1209,82 @@ begin
           model)
   returning * into scan;
 
-  -- 2 points for each of the first 5 successful scans per day
-  if cat <> 'uncertain' and today_scans < 5 then
-    perform public._award_points(uid, 2, 'scan', scan.item);
+  -- Scanning itself earns nothing; points come when the item is disposed of properly (confirm_disposal).
+  return to_jsonb(scan) || jsonb_build_object('points_awarded', 0);
+end;
+$$;
+
+-- Points for disposing of a scanned item properly: the member photographs it going into the
+-- right bin / compost / collection point, and AI checks the photo.
+create or replace function public.confirm_disposal(p_scan_id uuid, p_image_base64 text, p_mime text default 'image/jpeg',
+                                                   p_image_path text default null, p_language text default 'en')
+returns jsonb language plpgsql volatile security definer set search_path = '' as $$
+declare
+  uid      uuid := public._require_user();
+  lang     text := case when p_language = 'rw' then 'Kinyarwanda' else 'English' end;
+  scan     public.waste_scans;
+  result   jsonb;
+  msgs     jsonb;
+  ok       boolean;
+  conf     real;
+  feedback text;
+  today_disposals integer;
+  pts      integer := 0;
+begin
+  select * into scan from public.waste_scans where id = p_scan_id and user_id = uid for update;
+  if scan.id is null then raise exception 'This scan is no longer available.' using errcode = 'P0001'; end if;
+  if scan.disposed_at is not null then
+    return jsonb_build_object('disposed', true, 'already', true, 'points_awarded', 0, 'feedback', scan.disposal_feedback);
+  end if;
+  if scan.category = 'uncertain' then
+    raise exception 'Scan a clear waste item first.' using errcode = 'P0001';
+  end if;
+  if p_mime not in ('image/jpeg', 'image/png', 'image/webp')
+     or p_image_base64 is null or length(p_image_base64) < 200 or length(p_image_base64) > 1500000 then
+    raise exception 'The photo is too large. Try again.' using errcode = 'P0001';
+  end if;
+  if p_image_path is not null and split_part(p_image_path, '/', 1) <> uid::text then
+    raise exception 'Invalid photo path.' using errcode = 'P0001';
   end if;
 
-  return to_jsonb(scan) || jsonb_build_object('points_awarded', case when cat <> 'uncertain' and today_scans < 5 then 2 else 0 end);
+  msgs := jsonb_build_array(jsonb_build_object('role', 'user', 'content', jsonb_build_array(
+    jsonb_build_object('type', 'text', 'text',
+      'You check proof photos for EcoFun, a recycling app in Rwanda. Earlier the member scanned: "' || scan.item ||
+      '" (' || replace(scan.category, '_', '-') || '). Recommended disposal: ' || scan.disposal || ' ' ||
+      'Does THIS photo show that kind of item being disposed of properly — for example put into a waste bin, a sorting or ' ||
+      'recycling bin, a compost heap or pit, a collection sack, or handed to a collection point? Accept reasonable real photos; ' ||
+      'reject photos with no item, no bin/compost/collection context, screenshots, or littering and burning. ' ||
+      'Write "feedback" in ' || lang || ' as one short friendly sentence. Return ONLY JSON: ' ||
+      '{"disposed": true or false, "confidence": number 0-1, "feedback": "..."}'),
+    jsonb_build_object('type', 'image_url', 'image_url', jsonb_build_object('url', 'data:' || p_mime || ';base64,' || p_image_base64))
+  )));
+  begin
+    result := public._nvidia_chat('nvidia/nemotron-3.5-super-vl-120b-a12b', msgs, 250, 0.1);
+  exception when others then
+    begin
+      result := public._nvidia_chat('nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', msgs, 250, 0.1);
+    exception when others then
+      raise exception 'The AI could not check this photo right now. Please try again.' using errcode = 'P0002';
+    end;
+  end;
+
+  ok := coalesce(lower(result ->> 'disposed') in ('true', 'yes'), false);
+  conf := coalesce(case when (result ->> 'confidence') ~ '^[0-9.]+$' then (result ->> 'confidence')::real end, 0);
+  feedback := left(coalesce(nullif(result ->> 'feedback', ''), ''), 300);
+  if not ok or conf < 0.5 then
+    return jsonb_build_object('disposed', false, 'points_awarded', 0, 'feedback', feedback);
+  end if;
+
+  -- 3 points for each of the first 10 proper disposals per day
+  select count(*) into today_disposals from public.waste_scans
+  where user_id = uid and disposal_points > 0 and (disposed_at at time zone 'Africa/Kigali')::date = public.eco_today();
+  if today_disposals < 10 then pts := 3; end if;
+
+  update public.waste_scans set disposed_at = now(), disposal_image_path = p_image_path,
+         disposal_feedback = feedback, disposal_points = pts
+  where id = scan.id;
+  perform public._award_points(uid, pts, 'disposal', scan.item);
+  return jsonb_build_object('disposed', true, 'points_awarded', pts, 'feedback', feedback);
 end;
 $$;
 
@@ -973,9 +1301,6 @@ declare
   story  text := btrim(coalesce(p_story, ''));
 begin
   select * into p from public.daily_progress where user_id = uid and day = today;
-  if p.quiz_completed_at is null then
-    raise exception 'Finish today''s quiz first.' using errcode = 'P0001';
-  end if;
   if p.mission_completed_at is not null then
     raise exception 'You already completed today''s mission.' using errcode = 'P0001';
   end if;
@@ -992,7 +1317,8 @@ begin
   select * into m from public.missions where id = public._mission_for_day(today);
   insert into public.mission_completions (user_id, day, mission_id, story, image_path, scan_id, points_awarded)
   values (uid, today, m.id, story, p_image_path, p_scan_id, m.points);
-  update public.daily_progress set mission_completed_at = now() where user_id = uid and day = today;
+  insert into public.daily_progress (user_id, day, mission_completed_at) values (uid, today, now())
+  on conflict (user_id, day) do update set mission_completed_at = now();
   perform public._award_points(uid, m.points, 'mission', m.title_en);
 
   return jsonb_build_object('points_awarded', m.points, 'streak', public._streak(uid));
@@ -1000,11 +1326,23 @@ end;
 $$;
 
 -- ----------------------------------------------------------------------------
--- 12. Community: posts, ratings, leaderboard, admin
+-- 12. Community: posts, ratings, comments, leaderboard
+--     Points come from other members' ratings (1-5 stars = 1-5 points), never from posting.
 -- ----------------------------------------------------------------------------
+create or replace function public._post_json(p_post public.community_posts, p_viewer uuid)
+returns jsonb language sql stable security definer set search_path = '' as $$
+  select jsonb_build_object(
+    'id', p_post.id, 'user_id', p_post.user_id, 'image_path', p_post.image_path, 'caption', p_post.caption,
+    'rating_count', p_post.rating_count, 'rating_total', p_post.rating_total, 'comment_count', p_post.comment_count,
+    'created_at', p_post.created_at,
+    'author_name', pr.full_name, 'author_avatar', pr.avatar_url,
+    'my_rating', (select r.value from public.post_ratings r where r.post_id = p_post.id and r.user_id = p_viewer))
+  from public.profiles pr where pr.id = p_post.user_id;
+$$;
+
 create or replace function public.create_post(p_image_path text, p_caption text default '')
 returns uuid language plpgsql volatile security definer set search_path = '' as $$
-declare uid uuid := public._require_user(); pid uuid;
+declare uid uuid := public._require_user(); pid uuid; v_caption text := left(btrim(coalesce(p_caption, '')), 300);
 begin
   if p_image_path is null or split_part(p_image_path, '/', 1) <> uid::text then
     raise exception 'Upload a photo first.' using errcode = 'P0001';
@@ -1013,24 +1351,34 @@ begin
     raise exception 'You can share up to 10 photos a day.' using errcode = 'P0001';
   end if;
   insert into public.community_posts (user_id, image_path, caption)
-  values (uid, p_image_path, left(btrim(coalesce(p_caption, '')), 300)) returning id into pid;
+  values (uid, p_image_path, v_caption) returning id into pid;
+  perform public._notify_admins('new_post', uid, pid, jsonb_build_object('caption', left(v_caption, 120)));
   return pid;
 end;
 $$;
 
 create or replace function public.get_feed(p_limit integer default 20, p_before timestamptz default null)
-returns jsonb language sql stable security definer set search_path = '' as $$
-  select coalesce(jsonb_agg(x order by (x ->> 'created_at') desc), '[]'::jsonb) from (
-    select jsonb_build_object(
-      'id', c.id, 'user_id', c.user_id, 'image_path', c.image_path, 'caption', c.caption,
-      'rating_count', c.rating_count, 'rating_total', c.rating_total, 'created_at', c.created_at,
-      'author_name', pr.full_name, 'author_avatar', pr.avatar_url,
-      'my_rating', (select r.value from public.post_ratings r where r.post_id = c.id and r.user_id = auth.uid())) x
-    from public.community_posts c
-    join public.profiles pr on pr.id = c.user_id
-    where auth.uid() is not null and (p_before is null or c.created_at < p_before)
-    order by c.created_at desc
-    limit least(greatest(p_limit, 1), 50)) t;
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := public._require_user();
+begin
+  return coalesce((
+    select jsonb_agg(public._post_json(c, uid) order by c.created_at desc)
+    from (select c.* from public.community_posts c
+          join public.profiles pr on pr.id = c.user_id and pr.suspended_at is null
+          where p_before is null or c.created_at < p_before
+          order by c.created_at desc
+          limit least(greatest(p_limit, 1), 50)) c), '[]'::jsonb);
+end;
+$$;
+
+create or replace function public.get_post(p_post_id uuid)
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := public._require_user(); post public.community_posts;
+begin
+  select * into post from public.community_posts where id = p_post_id;
+  if post.id is null then raise exception 'This post is no longer available.' using errcode = 'P0001'; end if;
+  return public._post_json(post, uid);
+end;
 $$;
 
 create or replace function public.rate_post(p_post_id uuid, p_value integer)
@@ -1049,42 +1397,406 @@ begin
   end if;
   update public.community_posts set rating_count = rating_count + 1, rating_total = rating_total + p_value
   where id = p_post_id returning * into post;
-  perform public._award_points(post.user_id, 1, 'rating_received', p_value || ' stars');
+  perform public._award_points(post.user_id, p_value, 'rating_received', p_value || ' stars');
+  perform public._notify(post.user_id, 'rating', uid, post.id, jsonb_build_object('stars', p_value));
   return jsonb_build_object('already_rated', false, 'rating_count', post.rating_count, 'rating_total', post.rating_total);
 end;
 $$;
 
-create or replace function public.admin_grant_points(p_email text, p_points integer, p_reason text)
-returns jsonb language plpgsql volatile security definer set search_path = '' as $$
-declare uid uuid := public._require_user(); target uuid; target_name text;
+create or replace function public.get_comments(p_post_id uuid)
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := public._require_user();
 begin
-  if not coalesce((select is_admin from public.profiles where id = uid), false) then
-    raise exception 'Admin access is required.' using errcode = '42501';
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', c.id, 'post_id', c.post_id, 'user_id', c.user_id, 'body', c.body, 'created_at', c.created_at,
+      'author_name', pr.full_name, 'author_avatar', pr.avatar_url) order by c.created_at)
+    from (select * from public.post_comments where post_id = p_post_id order by created_at desc limit 200) c
+    join public.profiles pr on pr.id = c.user_id), '[]'::jsonb);
+end;
+$$;
+
+create or replace function public.add_comment(p_post_id uuid, p_body text)
+returns jsonb language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_user(); post public.community_posts; v_body text := btrim(coalesce(p_body, '')); cid uuid;
+begin
+  if char_length(v_body) < 1 or char_length(v_body) > 500 then
+    raise exception 'Write a comment (up to 500 characters).' using errcode = 'P0001';
   end if;
-  if p_points is null or p_points not between 1 and 500 then
-    raise exception 'Points must be between 1 and 500.' using errcode = 'P0001';
+  select * into post from public.community_posts where id = p_post_id for update;
+  if post.id is null then raise exception 'This post is no longer available.' using errcode = 'P0001'; end if;
+  if (select count(*) from public.post_comments where user_id = uid and created_at > now() - interval '1 hour') >= 30 then
+    raise exception 'You are commenting very fast. Take a short break.' using errcode = 'P0001';
   end if;
-  if char_length(btrim(coalesce(p_reason, ''))) < 3 then
-    raise exception 'Add a short reason.' using errcode = 'P0001';
+  insert into public.post_comments (post_id, user_id, body) values (p_post_id, uid, v_body) returning id into cid;
+  update public.community_posts set comment_count = comment_count + 1 where id = p_post_id;
+  perform public._notify(post.user_id, 'comment', uid, post.id, jsonb_build_object('snippet', left(v_body, 120)));
+  return jsonb_build_object('id', cid);
+end;
+$$;
+
+-- Authors delete their own comments; admins can delete any.
+create or replace function public.delete_comment(p_comment_id uuid)
+returns void language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_user(); c public.post_comments;
+begin
+  select * into c from public.post_comments where id = p_comment_id;
+  if c.id is null then return; end if;
+  if c.user_id <> uid and not public.is_admin() then
+    raise exception 'You can only delete your own comments.' using errcode = '42501';
   end if;
-  select id into target from auth.users where lower(email) = lower(btrim(p_email));
-  if target is null then raise exception 'No member uses that email.' using errcode = 'P0001'; end if;
-  perform public._award_points(target, p_points, 'admin_grant', left(btrim(p_reason), 200), uid);
-  select full_name into target_name from public.profiles where id = target;
-  return jsonb_build_object('ok', true, 'member', target_name);
+  delete from public.post_comments where id = c.id;
+  update public.community_posts set comment_count = greatest(0, comment_count - 1) where id = c.post_id;
+end;
+$$;
+
+-- Verified, active members only (admins are not ranked).
+create or replace function public.get_leaderboard(p_limit integer default 100)
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := public._require_user();
+begin
+  return jsonb_build_object(
+    'leaders', coalesce((
+      select jsonb_agg(jsonb_build_object('id', id, 'full_name', full_name, 'avatar_url', avatar_url, 'points', points, 'rank', rnk) order by rnk)
+      from (select id, full_name, avatar_url, points, rank() over (order by points desc) as rnk, created_at
+            from public.profiles where not is_admin and suspended_at is null
+            order by points desc, created_at limit least(greatest(p_limit, 1), 200)) t), '[]'::jsonb),
+    'my_rank', (select rnk from (select id, rank() over (order by points desc) as rnk from public.profiles
+                                 where not is_admin and suspended_at is null) r where r.id = uid),
+    'members', (select count(*) from public.profiles where not is_admin and suspended_at is null));
 end;
 $$;
 
 create or replace function public.delete_my_account()
 returns void language plpgsql volatile security definer set search_path = '' as $$
-declare uid uuid := public._require_user();
+declare uid uuid := public._require_user(); v_name text; v_email text;
 begin
+  select p.full_name, u.email into v_name, v_email from public.profiles p join auth.users u on u.id = p.id where p.id = uid;
+  perform public._notify_admins('user_left', null, null, jsonb_build_object('name', v_name, 'email', v_email));
   delete from auth.users where id = uid;
 end;
 $$;
 
 -- ----------------------------------------------------------------------------
--- 12b. Emails: welcome, password changed, streak milestones, goodbye
+-- 12a. Notifications
+-- ----------------------------------------------------------------------------
+create or replace function public.get_notifications(p_limit integer default 40, p_before timestamptz default null)
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := public._require_user();
+begin
+  return jsonb_build_object(
+    'unread', (select count(*) from public.notifications where user_id = uid and read_at is null),
+    'items', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', n.id, 'kind', n.kind, 'data', n.data, 'read', n.read_at is not null, 'created_at', n.created_at,
+        'post_id', n.post_id, 'post_image', cp.image_path,
+        'actor_id', n.actor_id, 'actor_name', a.full_name, 'actor_avatar', a.avatar_url) order by n.created_at desc)
+      from (select * from public.notifications where user_id = uid and (p_before is null or created_at < p_before)
+            order by created_at desc limit least(greatest(p_limit, 1), 100)) n
+      left join public.profiles a on a.id = n.actor_id
+      left join public.community_posts cp on cp.id = n.post_id), '[]'::jsonb));
+end;
+$$;
+
+-- Marks the given notifications (or all, when p_ids is null) as read. Returns the new unread count.
+create or replace function public.mark_notifications_read(p_ids bigint[] default null)
+returns integer language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_user();
+begin
+  update public.notifications set read_at = now()
+  where user_id = uid and read_at is null and (p_ids is null or id = any (p_ids));
+  return (select count(*) from public.notifications where user_id = uid and read_at is null);
+end;
+$$;
+
+create or replace function public.clear_notifications()
+returns void language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_user();
+begin
+  delete from public.notifications where user_id = uid;
+end;
+$$;
+
+-- Live updates for the notification bell.
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (select 1 from pg_publication_tables
+                     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'notifications') then
+    execute 'alter publication supabase_realtime add table public.notifications';
+  end if;
+end $$;
+
+-- ----------------------------------------------------------------------------
+-- 12b. Admin portal (every function checks that the caller is an admin)
+-- ----------------------------------------------------------------------------
+create or replace function public.admin_dashboard()
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := public._require_admin(); today date := public.eco_today();
+begin
+  return jsonb_build_object(
+    'members', (select count(*) from public.profiles where not is_admin),
+    'new_today', (select count(*) from public.profiles where not is_admin and (created_at at time zone 'Africa/Kigali')::date = today),
+    'new_week', (select count(*) from public.profiles where not is_admin and created_at > now() - interval '7 days'),
+    'active_today', (select count(distinct user_id) from (
+        select user_id from public.daily_progress where day = today
+        union all select user_id from public.waste_scans where created_at > now() - interval '1 day'
+        union all select user_id from public.quiz_sessions where created_at > now() - interval '1 day'
+        union all select user_id from public.community_posts where created_at > now() - interval '1 day') a),
+    'suspended', (select count(*) from public.profiles where suspended_at is not null),
+    'unverified', (select count(*) from auth.users where email_confirmed_at is null),
+    'posts', (select count(*) from public.community_posts),
+    'posts_today', (select count(*) from public.community_posts where created_at > now() - interval '1 day'),
+    'comments', (select count(*) from public.post_comments),
+    'ratings', (select count(*) from public.post_ratings),
+    'quizzes', (select count(*) from public.quiz_sessions where finished_at is not null),
+    'quizzes_today', (select count(*) from public.quiz_sessions where finished_at > now() - interval '1 day'),
+    'quiz_questions', (select count(*) from public.quiz_pool),
+    'scans', (select count(*) from public.waste_scans),
+    'disposals', (select count(*) from public.waste_scans where disposed_at is not null),
+    'missions', (select count(*) from public.mission_completions),
+    'stories_read', (select count(*) from public.news_reads),
+    'articles', (select count(*) from public.news_articles),
+    'points_total', (select coalesce(sum(points), 0) from public.profiles where not is_admin),
+    'signups', (select jsonb_agg(jsonb_build_object('day', g::date, 'count',
+                  (select count(*) from public.profiles p where not p.is_admin and (p.created_at at time zone 'Africa/Kigali')::date = g::date))
+                  order by g) from generate_series(today - 13, today, interval '1 day') g),
+    'top', coalesce((select jsonb_agg(jsonb_build_object('id', id, 'full_name', full_name, 'avatar_url', avatar_url, 'points', points))
+             from (select * from public.profiles where not is_admin and suspended_at is null order by points desc limit 5) t), '[]'::jsonb),
+    'recent', coalesce((select jsonb_agg(jsonb_build_object('id', p.id, 'full_name', p.full_name, 'avatar_url', p.avatar_url,
+                                                   'email', u.email, 'created_at', p.created_at) order by p.created_at desc)
+             from (select * from public.profiles where not is_admin order by created_at desc limit 5) p
+             join auth.users u on u.id = p.id), '[]'::jsonb));
+end;
+$$;
+
+create or replace function public.admin_users(p_search text default '', p_filter text default 'all',
+                                              p_limit integer default 30, p_offset integer default 0)
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := public._require_admin(); q text := '%' || lower(btrim(coalesce(p_search, ''))) || '%';
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', p.id, 'full_name', p.full_name, 'avatar_url', p.avatar_url, 'email', u.email, 'points', p.points,
+      'is_admin', p.is_admin, 'suspended', p.suspended_at is not null, 'created_at', p.created_at,
+      'last_seen', u.last_sign_in_at) order by p.created_at desc)
+    from (select p.* from public.profiles p join auth.users u on u.id = p.id
+          where (lower(p.full_name) like q or lower(u.email) like q)
+            and case p_filter when 'suspended' then p.suspended_at is not null
+                              when 'admins' then p.is_admin
+                              when 'active' then p.suspended_at is null and not p.is_admin
+                              else true end
+          order by p.created_at desc
+          limit least(greatest(p_limit, 1), 100) offset greatest(p_offset, 0)) p
+    join auth.users u on u.id = p.id), '[]'::jsonb);
+end;
+$$;
+
+create or replace function public.admin_user_detail(p_user uuid)
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := public._require_admin(); p public.profiles; u record;
+begin
+  select * into p from public.profiles where id = p_user;
+  if p.id is null then raise exception 'This member no longer exists.' using errcode = 'P0001'; end if;
+  select email, last_sign_in_at, email_confirmed_at into u from auth.users where id = p_user;
+  return jsonb_build_object(
+    'profile', jsonb_build_object('id', p.id, 'full_name', p.full_name, 'avatar_url', p.avatar_url, 'points', p.points,
+                                  'is_admin', p.is_admin, 'suspended', p.suspended_at is not null,
+                                  'suspended_reason', p.suspended_reason, 'suspended_at', p.suspended_at,
+                                  'created_at', p.created_at, 'email', u.email, 'last_seen', u.last_sign_in_at,
+                                  'verified_at', u.email_confirmed_at),
+    'stats', jsonb_build_object(
+      'streak', public._streak(p_user),
+      'missions', (select count(*) from public.mission_completions where user_id = p_user),
+      'quizzes', (select count(*) from public.quiz_sessions where user_id = p_user and finished_at is not null),
+      'correct_answers', (select count(*) from public.quiz_session_items i join public.quiz_sessions s on s.id = i.session_id
+                          where s.user_id = p_user and i.correct),
+      'scans', (select count(*) from public.waste_scans where user_id = p_user),
+      'disposals', (select count(*) from public.waste_scans where user_id = p_user and disposed_at is not null),
+      'stories_read', (select count(*) from public.news_reads where user_id = p_user),
+      'posts', (select count(*) from public.community_posts where user_id = p_user),
+      'comments', (select count(*) from public.post_comments where user_id = p_user),
+      'ratings_given', (select count(*) from public.post_ratings where user_id = p_user),
+      'ratings_received', (select coalesce(sum(rating_count), 0) from public.community_posts where user_id = p_user)),
+    'points', coalesce((select jsonb_agg(jsonb_build_object('amount', amount, 'reason', reason, 'note', note, 'created_at', created_at)
+                         order by created_at desc)
+                       from (select * from public.point_events where user_id = p_user order by created_at desc limit 25) e), '[]'::jsonb),
+    'posts', coalesce((select jsonb_agg(public._post_json(c, uid) order by c.created_at desc)
+                      from (select * from public.community_posts where user_id = p_user order by created_at desc limit 12) c), '[]'::jsonb));
+end;
+$$;
+
+create or replace function public.admin_set_suspended(p_user uuid, p_suspended boolean, p_reason text default '')
+returns void language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_admin(); target public.profiles;
+begin
+  select * into target from public.profiles where id = p_user;
+  if target.id is null then raise exception 'This member no longer exists.' using errcode = 'P0001'; end if;
+  if target.id = uid or target.is_admin then raise exception 'Admins cannot be suspended.' using errcode = 'P0001'; end if;
+  update public.profiles set suspended_at = case when p_suspended then now() end,
+         suspended_reason = case when p_suspended then left(btrim(coalesce(p_reason, '')), 300) end
+  where id = p_user;
+  -- also blocks sign-in and token refresh
+  update auth.users set banned_until = case when p_suspended then 'infinity'::timestamptz end where id = p_user;
+end;
+$$;
+
+create or replace function public.admin_delete_user(p_user uuid)
+returns void language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_admin(); target public.profiles;
+begin
+  select * into target from public.profiles where id = p_user;
+  if target.id is null then return; end if;
+  if target.id = uid or target.is_admin then raise exception 'Admins cannot be deleted here.' using errcode = 'P0001'; end if;
+  delete from auth.users where id = p_user;
+end;
+$$;
+
+create or replace function public.admin_adjust_points(p_user uuid, p_points integer, p_reason text)
+returns integer language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_admin(); v_reason text := left(btrim(coalesce(p_reason, '')), 200); v_points integer;
+begin
+  if p_points is null or p_points = 0 or p_points not between -1000 and 1000 then
+    raise exception 'Points must be between -1000 and 1000.' using errcode = 'P0001';
+  end if;
+  if char_length(v_reason) < 3 then raise exception 'Add a short reason.' using errcode = 'P0001'; end if;
+  if not exists (select 1 from public.profiles where id = p_user) then
+    raise exception 'This member no longer exists.' using errcode = 'P0001';
+  end if;
+  perform public._award_points(p_user, p_points, case when p_points > 0 then 'admin_grant' else 'admin_deduct' end, v_reason, uid);
+  perform public._notify(p_user, case when p_points > 0 then 'points_granted' else 'points_removed' end, null, null,
+                         jsonb_build_object('points', abs(p_points), 'reason', v_reason));
+  select points into v_points from public.profiles where id = p_user;
+  return v_points;
+end;
+$$;
+
+-- Kept for older app versions.
+create or replace function public.admin_grant_points(p_email text, p_points integer, p_reason text)
+returns jsonb language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_admin(); target uuid; target_name text;
+begin
+  select id into target from auth.users where lower(email) = lower(btrim(p_email));
+  if target is null then raise exception 'No member uses that email.' using errcode = 'P0001'; end if;
+  perform public.admin_adjust_points(target, p_points, p_reason);
+  select full_name into target_name from public.profiles where id = target;
+  return jsonb_build_object('ok', true, 'member', target_name);
+end;
+$$;
+
+create or replace function public.admin_posts(p_limit integer default 20, p_before timestamptz default null)
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := public._require_admin();
+begin
+  return coalesce((
+    select jsonb_agg(public._post_json(c, uid) || jsonb_build_object('author_email', u.email,
+                     'author_suspended', pr.suspended_at is not null) order by c.created_at desc)
+    from (select * from public.community_posts where p_before is null or created_at < p_before
+          order by created_at desc limit least(greatest(p_limit, 1), 50)) c
+    join public.profiles pr on pr.id = c.user_id
+    join auth.users u on u.id = c.user_id), '[]'::jsonb);
+end;
+$$;
+
+create or replace function public.admin_delete_post(p_post_id uuid, p_reason text default '')
+returns jsonb language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_admin(); post public.community_posts;
+begin
+  select * into post from public.community_posts where id = p_post_id;
+  if post.id is null then return jsonb_build_object('deleted', false); end if;
+  delete from public.community_posts where id = post.id;
+  perform public._notify(post.user_id, 'post_removed', null, null,
+                         jsonb_build_object('caption', left(post.caption, 120), 'reason', left(btrim(coalesce(p_reason, '')), 200)));
+  return jsonb_build_object('deleted', true, 'image_path', post.image_path, 'user_id', post.user_id);
+end;
+$$;
+
+create or replace function public.admin_translate(p_text text, p_from text, p_to text)
+returns text language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_admin(); r text[];
+begin
+  if p_from not in ('en', 'rw') or p_to not in ('en', 'rw') or p_from = p_to then
+    raise exception 'Choose English or Kinyarwanda.' using errcode = 'P0001';
+  end if;
+  if char_length(btrim(coalesce(p_text, ''))) = 0 then return ''; end if;
+  -- keep paragraphs: translate line by line
+  r := public._translate(regexp_split_to_array(left(p_text, 4000), E'\n'), p_from, p_to);
+  if r is null then raise exception 'Translation is not available right now. Try again.' using errcode = 'P0002'; end if;
+  return array_to_string(r, E'\n');
+end;
+$$;
+
+create or replace function public.admin_post_announcement(p_title_en text, p_body_en text, p_title_rw text, p_body_rw text,
+                                                          p_send_email boolean default false)
+returns jsonb language plpgsql volatile security definer set search_path = '' as $$
+declare
+  uid  uuid := public._require_admin();
+  t_en text := left(btrim(coalesce(p_title_en, '')), 120);
+  b_en text := left(btrim(coalesce(p_body_en, '')), 2000);
+  t_rw text := left(btrim(coalesce(p_title_rw, '')), 120);
+  b_rw text := left(btrim(coalesce(p_body_rw, '')), 2000);
+  tr   text[];
+  aid  uuid;
+  n    integer;
+  r    record;
+begin
+  if (t_en = '' or b_en = '') and (t_rw = '' or b_rw = '') then
+    raise exception 'Write a title and a message.' using errcode = 'P0001';
+  end if;
+  -- fill a missing language automatically
+  if t_rw = '' or b_rw = '' then
+    tr := public._translate(array[t_en, b_en], 'en', 'rw');
+    t_rw := coalesce(nullif(t_rw, ''), tr[1], t_en); b_rw := coalesce(nullif(b_rw, ''), tr[2], b_en);
+  elsif t_en = '' or b_en = '' then
+    tr := public._translate(array[t_rw, b_rw], 'rw', 'en');
+    t_en := coalesce(nullif(t_en, ''), tr[1], t_rw); b_en := coalesce(nullif(b_en, ''), tr[2], b_rw);
+  end if;
+
+  insert into public.announcements (title_en, body_en, title_rw, body_rw, emailed, created_by)
+  values (t_en, b_en, t_rw, b_rw, coalesce(p_send_email, false), uid) returning id into aid;
+
+  insert into public.notifications (user_id, kind, actor_id, data)
+  select p.id, 'announcement', uid, jsonb_build_object('announcement_id', aid, 'title_en', t_en, 'body_en', b_en, 'title_rw', t_rw, 'body_rw', b_rw)
+  from public.profiles p where p.suspended_at is null and p.id <> uid;
+  get diagnostics n = row_count;
+  update public.announcements set recipients = n where id = aid;
+
+  if coalesce(p_send_email, false) then
+    for r in select u.id, u.email, coalesce(u.raw_user_meta_data, '{}') as meta
+             from auth.users u join public.profiles p on p.id = u.id
+             where p.suspended_at is null and not p.is_admin and u.email is not null
+               and coalesce(u.raw_user_meta_data ->> 'email_updates', 'true') <> 'false' loop
+      perform public._queue_email(r.id, r.email, 'announcement',
+        jsonb_build_object('name', public._display_name(r.meta, r.email), 'lang', public._user_lang(r.meta),
+                           'title', case when public._user_lang(r.meta) = 'rw' then t_rw else t_en end,
+                           'body', case when public._user_lang(r.meta) = 'rw' then b_rw else b_en end),
+        'announcement:' || aid || ':' || r.id);
+    end loop;
+  end if;
+  return jsonb_build_object('id', aid, 'recipients', n, 'title_en', t_en, 'title_rw', t_rw, 'body_en', b_en, 'body_rw', b_rw);
+end;
+$$;
+
+create or replace function public.admin_announcements(p_limit integer default 30)
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := public._require_admin();
+begin
+  return coalesce((select jsonb_agg(to_jsonb(a) order by a.created_at desc)
+                   from (select * from public.announcements order by created_at desc limit least(greatest(p_limit, 1), 100)) a), '[]'::jsonb);
+end;
+$$;
+
+create or replace function public.admin_delete_announcement(p_id uuid)
+returns void language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_admin();
+begin
+  delete from public.notifications where kind = 'announcement' and data ->> 'announcement_id' = p_id::text;
+  delete from public.announcements where id = p_id;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- 12c. Emails: welcome, password changed, streak milestones, announcements, goodbye
 --   Events are written to email_outbox; pg_net pings the ecofun-mailer Edge Function, which
 --   sends them through Gmail SMTP. A cron job retries anything that failed.
 --   (Sign-up / reset codes are sent by Supabase Auth itself, through the same Gmail account.)
@@ -1093,7 +1805,7 @@ create table if not exists public.email_outbox (
   id          bigint generated always as identity primary key,
   user_id     uuid references auth.users (id) on delete set null,
   to_email    text not null,
-  kind        text not null check (kind in ('welcome', 'password_changed', 'streak', 'goodbye')),
+  kind        text not null,
   data        jsonb not null default '{}',
   dedupe_key  text unique,
   status      text not null default 'pending' check (status in ('pending', 'sending', 'sent', 'failed')),
@@ -1103,6 +1815,9 @@ create table if not exists public.email_outbox (
   claimed_at  timestamptz,
   sent_at     timestamptz
 );
+alter table public.email_outbox drop constraint if exists email_outbox_kind_check;
+alter table public.email_outbox add constraint email_outbox_kind_check
+  check (kind in ('welcome', 'password_changed', 'streak', 'goodbye', 'announcement'));
 create index if not exists email_outbox_open_idx on public.email_outbox (id) where status <> 'sent';
 alter table public.email_outbox enable row level security;   -- no policies: app users can't see it
 revoke all on public.email_outbox from anon, authenticated;
@@ -1141,6 +1856,7 @@ create or replace function public._queue_email(p_user uuid, p_to text, p_kind te
 returns void language plpgsql volatile security definer set search_path = '' as $$
 begin
   if p_to is null or position('@' in p_to) = 0 then return; end if;
+  if lower(p_to) like '%@ecofun.com' then return; end if;   -- built-in staff accounts have no real inbox
   insert into public.email_outbox (user_id, to_email, kind, data, dedupe_key)
   values (p_user, lower(p_to), p_kind, coalesce(p_data, '{}'), p_dedupe)
   on conflict (dedupe_key) do nothing;
@@ -1291,18 +2007,40 @@ revoke all on function public.refresh_news() from public, anon, authenticated;
 revoke all on function public.handle_new_user() from public, anon, authenticated;
 
 grant execute on function public.eco_today() to anon, authenticated;
+grant execute on function public.is_admin() to authenticated;
 grant execute on function public.get_home() to authenticated;
 grant execute on function public.mark_news_read(text) to authenticated;
 grant execute on function public.get_quiz(text) to authenticated;
 grant execute on function public.answer_quiz(uuid, integer, integer) to authenticated;
 grant execute on function public.finish_quiz(uuid) to authenticated;
 grant execute on function public.classify_waste(text, text, text, text) to authenticated;
+grant execute on function public.confirm_disposal(uuid, text, text, text, text) to authenticated;
 grant execute on function public.complete_mission(text, text, uuid) to authenticated;
 grant execute on function public.create_post(text, text) to authenticated;
 grant execute on function public.get_feed(integer, timestamptz) to authenticated;
+grant execute on function public.get_post(uuid) to authenticated;
 grant execute on function public.rate_post(uuid, integer) to authenticated;
-grant execute on function public.admin_grant_points(text, integer, text) to authenticated;
+grant execute on function public.get_comments(uuid) to authenticated;
+grant execute on function public.add_comment(uuid, text) to authenticated;
+grant execute on function public.delete_comment(uuid) to authenticated;
+grant execute on function public.get_leaderboard(integer) to authenticated;
+grant execute on function public.get_notifications(integer, timestamptz) to authenticated;
+grant execute on function public.mark_notifications_read(bigint[]) to authenticated;
+grant execute on function public.clear_notifications() to authenticated;
 grant execute on function public.delete_my_account() to authenticated;
+grant execute on function public.admin_dashboard() to authenticated;
+grant execute on function public.admin_users(text, text, integer, integer) to authenticated;
+grant execute on function public.admin_user_detail(uuid) to authenticated;
+grant execute on function public.admin_set_suspended(uuid, boolean, text) to authenticated;
+grant execute on function public.admin_delete_user(uuid) to authenticated;
+grant execute on function public.admin_adjust_points(uuid, integer, text) to authenticated;
+grant execute on function public.admin_grant_points(text, integer, text) to authenticated;
+grant execute on function public.admin_posts(integer, timestamptz) to authenticated;
+grant execute on function public.admin_delete_post(uuid, text) to authenticated;
+grant execute on function public.admin_translate(text, text, text) to authenticated;
+grant execute on function public.admin_post_announcement(text, text, text, text, boolean) to authenticated;
+grant execute on function public.admin_announcements(integer) to authenticated;
+grant execute on function public.admin_delete_announcement(uuid) to authenticated;
 -- The mailer functions check the shared secret themselves.
 grant execute on function public.mailer_claim(text, integer) to anon, authenticated, service_role;
 grant execute on function public.mailer_done(text, bigint, text) to anon, authenticated, service_role;
@@ -1378,8 +2116,17 @@ insert into public.quiz_bank (language, question, options, correct_index, explan
   ('rw', 'Ni ikihe muri ibi kitabora?', array['Isashe y''impapuro', 'Amababi', 'Igikombe cya sitiropore', 'Igishishwa cy''icunga'], 2, 'Sitiropore ni pulasitiki itabora.')
 on conflict (question) do nothing;
 
+-- Seed the pool with the hand-written starter questions (English + Kinyarwanda pairs).
+insert into public.quiz_pool (topic, difficulty, question_en, choices_en, explanation_en, question_rw, choices_rw, explanation_rw, answer, source, fingerprint)
+select 'starter', 'easy', e.question, e.options, e.explanation, r.question, r.options, r.explanation, e.correct_index, 'bank',
+       public._quiz_fingerprint(e.question)
+from (select *, row_number() over (order by id) as n from public.quiz_bank where language = 'en') e
+join (select *, row_number() over (order by id) as n from public.quiz_bank where language = 'rw') r on r.n = e.n
+where e.correct_index = r.correct_index
+on conflict (fingerprint) do nothing;
+
 -- ----------------------------------------------------------------------------
--- 15. Schedule the news refresh (hourly) and email retries, then fill the feed right now
+-- 15. Scheduled jobs: news (hourly), email retries, quiz questions, unverified sign-up cleanup
 -- ----------------------------------------------------------------------------
 do $$
 begin
@@ -1387,6 +2134,23 @@ begin
   perform cron.schedule('ecofun-refresh-news', '7 * * * *', 'select public.refresh_news();');
   perform cron.unschedule(jobid) from cron.job where jobname = 'ecofun-mailer';
   perform cron.schedule('ecofun-mailer', '*/10 * * * *', 'select public._mailer_cron();');
+  perform cron.unschedule(jobid) from cron.job where jobname = 'ecofun-quiz-pool';
+  perform cron.schedule('ecofun-quiz-pool', '*/4 * * * *', 'select public._quiz_pool_tick();');
+  perform cron.unschedule(jobid) from cron.job where jobname = 'ecofun-purge-unverified';
+  perform cron.schedule('ecofun-purge-unverified', '*/15 * * * *', 'select public._purge_unverified();');
 end $$;
 
+-- ----------------------------------------------------------------------------
+-- 16. One-time data fixes (safe to repeat)
+-- ----------------------------------------------------------------------------
+-- Scanning no longer earns points: remove old scan points and recount every balance from its history.
+delete from public.point_events where reason = 'scan';
+update public.profiles p set points = greatest(0, coalesce((select sum(amount) from public.point_events e where e.user_id = p.id), 0))
+where p.points is distinct from greatest(0, coalesce((select sum(amount) from public.point_events e where e.user_id = p.id), 0));
+-- The built-in admin account (created with the Auth admin API) is always an admin.
+update public.profiles set is_admin = true, full_name = 'EcoFun Admin'
+where id in (select id from auth.users where lower(email) = 'admin@ecofun.com') and not is_admin;
+select public._purge_unverified() as unverified_removed;
+
+-- Fill the news feed right now.
 select public.refresh_news() as articles_saved;

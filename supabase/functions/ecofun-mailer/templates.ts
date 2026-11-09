@@ -181,6 +181,8 @@ export function layout(o: LayoutOptions): string {
 // App emails (sent by the Edge Function)
 // ---------------------------------------------------------------------------
 export interface EmailData {
+  title?: string;
+  body?: string;
   name?: string;
   lang?: string;
   email?: string;
@@ -343,6 +345,29 @@ const builders: Record<string, Builder> = {
             p("Keep it going — tomorrow's mission is waiting. &#127807;", "margin-bottom:8px;"),
           footer: "Don't want these updates? Turn off “Email updates” in EcoFun → Profile.",
         };
+  },
+
+  announcement: (d, lang) => {
+    const n = esc(firstName(d.name));
+    const paragraphs = String(d.body ?? "")
+      .split(/\n\s*\n|\n/)
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((t) => p(esc(t)))
+      .join("");
+    return {
+      subject: String(d.title ?? (lang === "rw" ? "Itangazo rya EcoFun" : "News from EcoFun")),
+      title: String(d.title ?? ""),
+      preheader: String(d.body ?? "").slice(0, 110),
+      emoji: "&#128226;",
+      body:
+        p(lang === "rw" ? `Muraho ${n},` : `Hi ${n},`, "margin-bottom:10px;") +
+        paragraphs +
+        small(lang === "rw" ? "Iri tangazo urarisanga no mu imenyesha rya EcoFun." : "You can also find this announcement in your EcoFun notifications."),
+      footer: lang === "rw"
+        ? "Ntushaka izi meyili? Zimya \u201cAmakuru kuri imeyili\u201d muri EcoFun \u2192 Njye."
+        : "Don't want these emails? Turn off \u201cEmail updates\u201d in EcoFun \u2192 Profile.",
+    };
   },
 
   goodbye: (d, lang) => {

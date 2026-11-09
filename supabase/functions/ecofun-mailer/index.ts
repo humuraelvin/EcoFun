@@ -95,6 +95,10 @@ Deno.serve(async (req) => {
       at: new Date().toISOString(),
       streak: 7,
       points: 145,
+      title: body.lang === "rw" ? "Umuganda wo kuwa Gatandatu" : "Umuganda clean-up this Saturday",
+      body: body.lang === "rw"
+        ? "Twifatanye kuri uyu wa Gatandatu saa tatu za mu gitondo.\nZana uturindantoki n'amazi."
+        : "Join us this Saturday at 9 am.\nBring gloves and water.",
     };
     const results: Record<string, string> = {};
     for (const kind of EMAIL_KINDS) {
