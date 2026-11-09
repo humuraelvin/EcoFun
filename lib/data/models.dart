@@ -14,7 +14,7 @@ class Profile {
 
   factory Profile.fromJson(Map<String, dynamic> j) => Profile(
         id: j['id'] as String,
-        fullName: (j['full_name'] as String?) ?? 'EcoStep member',
+        fullName: (j['full_name'] as String?) ?? 'EcoFun member',
         avatarUrl: j['avatar_url'] as String?,
         points: _int(j['points']),
         isAdmin: j['is_admin'] == true,
@@ -412,7 +412,7 @@ class CommunityPost {
         ratingCount: _int(j['rating_count']),
         ratingTotal: _int(j['rating_total']),
         createdAt: _date(j['created_at']),
-        authorName: (j['author_name'] as String?) ?? 'EcoStep member',
+        authorName: (j['author_name'] as String?) ?? 'EcoFun member',
         authorAvatar: j['author_avatar'] as String?,
         myRating: j['my_rating'] == null ? null : _int(j['my_rating']),
       );

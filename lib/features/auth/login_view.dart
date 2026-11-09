@@ -96,7 +96,7 @@ class _LoginViewState extends State<LoginView> {
     }
     if (_name.text.trim().length < 2) return setState(() => _error = 'auth.enterName'.tr());
     return _run(() async {
-      final outcome = await AuthRepository.signUp(_name.text, email, _password.text);
+      final outcome = await AuthRepository.signUp(_name.text, email, _password.text, lang: context.locale.languageCode);
       if (outcome == SignUpOutcome.signedIn) {
         await _enterApp();
       } else if (mounted) {
@@ -150,7 +150,7 @@ class _LoginViewState extends State<LoginView> {
         children: [
           SvgPicture.asset('assets/icons/logo.svg', height: 74),
           const SizedBox(height: 14),
-          Text('EcoStep', style: AppText.wordmark.c(c.brand)),
+          Text('EcoFun', style: AppText.wordmark.c(c.brand)),
           const SizedBox(height: 8),
           Text('auth.tagline'.tr(), textAlign: TextAlign.center, style: AppText.callout.c(c.secondaryLabel)),
         ],

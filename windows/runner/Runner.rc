@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "eco_step" "\0"
+            VALUE "FileDescription", "eco_fun" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "io.github.a3xhaust.ecostep" "\0"
+            VALUE "InternalName", "io.github.a3xhaust.ecofun" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "eco_step.exe" "\0"
-            VALUE "ProductName", "eco_step" "\0"
+            VALUE "OriginalFilename", "eco_fun.exe" "\0"
+            VALUE "ProductName", "eco_fun" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

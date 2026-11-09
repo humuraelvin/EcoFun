@@ -1,0 +1,26 @@
+{
+  "confirmation": {
+    "file": "confirm-signup.html",
+    "subject": "Your EcoFun verification code"
+  },
+  "recovery": {
+    "file": "reset-password.html",
+    "subject": "Your EcoFun password reset code"
+  },
+  "magic_link": {
+    "file": "magic-link.html",
+    "subject": "Your EcoFun sign-in code"
+  },
+  "email_change": {
+    "file": "change-email.html",
+    "subject": "Confirm your new EcoFun email"
+  },
+  "reauthentication": {
+    "file": "reauthentication.html",
+    "subject": "Confirm it's you — EcoFun"
+  },
+  "invite": {
+    "file": "invite.html",
+    "subject": "You're invited to EcoFun"
+  }
+}

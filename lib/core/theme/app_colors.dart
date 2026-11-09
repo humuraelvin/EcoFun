@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// EcoStep colour tokens, modelled on Apple's semantic system colours.
+/// EcoFun colour tokens, modelled on Apple's semantic system colours.
 @immutable
 class AppColors extends ThemeExtension<AppColors> {
   const AppColors({

@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>EcoStep</string>
+	<string>EcoFun</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>eco_step</string>
+	<string>eco_fun</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -47,9 +47,9 @@
 	<true/>
 	<!-- Camera and photo library permissions -->
 	<key>NSCameraUsageDescription</key>
-	<string>EcoStep uses the camera to identify waste and to photograph your climate missions.</string>
+	<string>EcoFun uses the camera to identify waste and to photograph your climate missions.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>EcoStep lets you choose a photo for waste identification, missions and community posts.</string>
+	<string>EcoFun lets you choose a photo for waste identification, missions and community posts.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

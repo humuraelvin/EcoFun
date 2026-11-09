@@ -17,6 +17,7 @@ import '../../core/widgets/photos.dart';
 import '../../core/widgets/pressable.dart';
 import '../../core/widgets/states.dart';
 import '../../core/widgets/toast.dart';
+import '../../data/auth_repository.dart';
 import '../../data/models.dart';
 import '../../data/repositories.dart';
 import '../../data/supa.dart';
@@ -34,6 +35,7 @@ class _ProfileViewState extends State<ProfileView> {
   final session = SessionController.to;
   List<MissionCompletion>? _recent;
   bool _uploading = false;
+  bool _emailUpdates = AuthRepository.emailUpdates;
   Worker? _worker;
   int? _missions;
 
@@ -61,6 +63,17 @@ class _ProfileViewState extends State<ProfileView> {
       if (mounted) setState(() => _recent = list);
     } catch (_) {
       if (mounted) setState(() => _recent = const []);
+    }
+  }
+
+  Future<void> _setEmailUpdates(bool on) async {
+    setState(() => _emailUpdates = on);
+    try {
+      await AuthRepository.setEmailUpdates(on);
+      showToast(on ? 'profile.emailUpdatesOn'.tr() : 'profile.emailUpdatesOff'.tr());
+    } catch (e) {
+      if (mounted) setState(() => _emailUpdates = !on);
+      showToast(friendlyError(e), error: true);
     }
   }
 
@@ -249,6 +262,18 @@ class _ProfileViewState extends State<ProfileView> {
                   title: 'profile.language'.tr(),
                   value: context.locale.languageCode == 'rw' ? 'Ikinyarwanda' : 'English',
                   onTap: _language,
+                ),
+                GroupedRow(
+                  icon: CupertinoIcons.envelope_fill,
+                  iconColor: const Color(0xFFFF375F),
+                  title: 'profile.emailUpdates'.tr(),
+                  showChevron: false,
+                  trailing: CupertinoSwitch(
+                    value: _emailUpdates,
+                    activeTrackColor: c.brand,
+                    onChanged: _setEmailUpdates,
+                  ),
+                  onTap: () => _setEmailUpdates(!_emailUpdates),
                 ),
                 Obx(() => session.profile?.isAdmin == true
                     ? GroupedRow(

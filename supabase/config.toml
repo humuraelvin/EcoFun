@@ -1,0 +1,6 @@
+# Minimal Supabase CLI config, used only to deploy the Edge Function (supabase/setup-email.sh).
+project_id = "ecofun"
+
+[functions.ecofun-mailer]
+# The function authenticates callers with the shared MAILER_SECRET header instead of a user JWT.
+verify_jwt = false

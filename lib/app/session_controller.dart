@@ -31,6 +31,7 @@ class SessionController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    ever(language, AuthRepository.syncLanguage);
     _authSub = supa.auth.onAuthStateChange.listen((state) {
       if (state.event == AuthChangeEvent.signedOut) {
         home.value = null;
@@ -49,6 +50,7 @@ class SessionController extends GetxController {
   Future<void> start() async {
     home.value ??= await HomeRepository.cached();
     if (Get.isRegistered<NewsController>()) NewsController.to.loadReads();
+    unawaited(AuthRepository.syncLanguage(language.value));
     await refreshHome();
   }
 

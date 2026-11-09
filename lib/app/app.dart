@@ -11,8 +11,8 @@ import 'news_controller.dart';
 import 'routes.dart';
 import 'session_controller.dart';
 
-class EcoStepApp extends StatelessWidget {
-  const EcoStepApp({super.key});
+class EcoFunApp extends StatelessWidget {
+  const EcoFunApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +31,7 @@ class EcoStepApp extends StatelessWidget {
     }
 
     return GetMaterialApp(
-      title: 'EcoStep',
+      title: 'EcoFun',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),

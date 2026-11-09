@@ -1,5 +1,5 @@
 -- ============================================================================
---  EcoStep — complete Supabase schema
+--  EcoFun — complete Supabase schema
 --  Paste this whole file into Supabase → SQL Editor → New query → Run.
 --  It is safe to run again: every statement is idempotent.
 --  After it succeeds, run supabase/secrets.local.sql (stores the NVIDIA key).
@@ -10,6 +10,7 @@
 -- ----------------------------------------------------------------------------
 create extension if not exists http with schema extensions;      -- outbound HTTPS (AI + RSS)
 create extension if not exists pg_cron;                            -- hourly news refresh
+create extension if not exists pg_net with schema extensions;      -- async calls to the email sender
 
 -- AI calls can take up to ~40 s; PostgREST's default limit for signed-in users is 8 s.
 alter role authenticated set statement_timeout = '60s';
@@ -18,7 +19,7 @@ notify pgrst, 'reload config';
 -- ----------------------------------------------------------------------------
 -- 1. Helpers
 -- ----------------------------------------------------------------------------
--- EcoStep days follow Rwanda time (Africa/Kigali, UTC+2) for every user.
+-- EcoFun days follow Rwanda time (Africa/Kigali, UTC+2) for every user.
 create or replace function public.eco_today()
 returns date language sql stable set search_path = '' as $$
   select (now() at time zone 'Africa/Kigali')::date;
@@ -29,7 +30,7 @@ $$;
 -- ----------------------------------------------------------------------------
 create table if not exists public.profiles (
   id          uuid primary key references auth.users (id) on delete cascade,
-  full_name   text not null default 'EcoStep member' check (char_length(full_name) between 1 and 80),
+  full_name   text not null default 'EcoFun member' check (char_length(full_name) between 1 and 80),
   avatar_url  text check (avatar_url is null or char_length(avatar_url) <= 500),
   points      integer not null default 0,
   is_admin    boolean not null default false,
@@ -281,22 +282,28 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 on conflict (id) do update set public = excluded.public,
   file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
+-- Policies from the app's earlier name (EcoStep), if an older version of this script ran.
 drop policy if exists "ecostep upload own folder" on storage.objects;
-create policy "ecostep upload own folder" on storage.objects for insert to authenticated
+drop policy if exists "ecostep update own avatar" on storage.objects;
+drop policy if exists "ecostep read own private" on storage.objects;
+drop policy if exists "ecostep delete own files" on storage.objects;
+
+drop policy if exists "ecofun upload own folder" on storage.objects;
+create policy "ecofun upload own folder" on storage.objects for insert to authenticated
   with check (bucket_id in ('missions', 'scans', 'community', 'avatars')
               and (storage.foldername(name))[1] = (select auth.uid())::text);
 
-drop policy if exists "ecostep update own avatar" on storage.objects;
-create policy "ecostep update own avatar" on storage.objects for update to authenticated
+drop policy if exists "ecofun update own avatar" on storage.objects;
+create policy "ecofun update own avatar" on storage.objects for update to authenticated
   using (bucket_id = 'avatars' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
-drop policy if exists "ecostep read own private" on storage.objects;
-create policy "ecostep read own private" on storage.objects for select to authenticated
+drop policy if exists "ecofun read own private" on storage.objects;
+create policy "ecofun read own private" on storage.objects for select to authenticated
   using (bucket_id in ('missions', 'scans', 'avatars', 'community')
          and (storage.foldername(name))[1] = (select auth.uid())::text);
 
-drop policy if exists "ecostep delete own files" on storage.objects;
-create policy "ecostep delete own files" on storage.objects for delete to authenticated
+drop policy if exists "ecofun delete own files" on storage.objects;
+create policy "ecofun delete own files" on storage.objects for delete to authenticated
   using (bucket_id in ('missions', 'scans', 'community', 'avatars')
          and (storage.foldername(name))[1] = (select auth.uid())::text);
 
@@ -312,7 +319,7 @@ begin
     left(coalesce(nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''),
                   nullif(trim(new.raw_user_meta_data ->> 'name'), ''),
                   split_part(new.email, '@', 1),
-                  'EcoStep member'), 80),
+                  'EcoFun member'), 80),
     coalesce(new.raw_user_meta_data ->> 'avatar_url', new.raw_user_meta_data ->> 'picture')
   )
   on conflict (id) do nothing;
@@ -326,16 +333,18 @@ create trigger on_auth_user_created after insert on auth.users
 
 -- Backfill profiles for accounts created before this script ran.
 insert into public.profiles (id, full_name)
-select u.id, left(coalesce(nullif(trim(u.raw_user_meta_data ->> 'full_name'), ''), split_part(u.email, '@', 1), 'EcoStep member'), 80)
+select u.id, left(coalesce(nullif(trim(u.raw_user_meta_data ->> 'full_name'), ''), split_part(u.email, '@', 1), 'EcoFun member'), 80)
 from auth.users u
 on conflict (id) do nothing;
+-- Default names from the app's earlier name.
+update public.profiles set full_name = 'EcoFun member' where full_name = 'EcoStep member';
 
 create or replace function public.touch_profile()
 returns trigger language plpgsql set search_path = '' as $$
 begin
   new.updated_at := now();
   new.full_name := left(trim(new.full_name), 80);
-  if new.full_name = '' then new.full_name := 'EcoStep member'; end if;
+  if new.full_name = '' then new.full_name := 'EcoFun member'; end if;
   return new;
 end;
 $$;
@@ -523,11 +532,11 @@ begin
     begin
       select status, content as c into resp from extensions.http((
         'GET', src.url,
-        array[extensions.http_header('User-Agent', 'Mozilla/5.0 (Linux; Android 14) EcoStep/1.0 news reader'),
+        array[extensions.http_header('User-Agent', 'Mozilla/5.0 (Linux; Android 14) EcoFun/1.0 news reader'),
               extensions.http_header('Accept', 'application/rss+xml, application/xml, text/xml')],
         null, null)::extensions.http_request);
       if resp.status <> 200 or resp.c is null then
-        raise warning 'EcoStep news: % returned %', src.url, resp.status;
+        raise warning 'EcoFun news: % returned %', src.url, resp.status;
         continue;
       end if;
 
@@ -580,11 +589,11 @@ begin
             image_url = coalesce(excluded.image_url, public.news_articles.image_url), fetched_at = now();
           saved := saved + 1;
         exception when others then
-          raise warning 'EcoStep news item skipped (%): %', src.name, sqlerrm;
+          raise warning 'EcoFun news item skipped (%): %', src.name, sqlerrm;
         end;
       end loop;
     exception when others then
-      raise warning 'EcoStep news source failed (%): %', src.url, sqlerrm;
+      raise warning 'EcoFun news source failed (%): %', src.url, sqlerrm;
     end;
   end loop;
 
@@ -715,7 +724,7 @@ begin
     'nvidia/nemotron-3.5-lightning-30b-a3b',
     jsonb_build_array(
       jsonb_build_object('role', 'system', 'content',
-        'You write short, fair multiple-choice quizzes for EcoStep, a climate-education app for people in Rwanda. ' ||
+        'You write short, fair multiple-choice quizzes for EcoFun, a climate-education app for people in Rwanda. ' ||
         'Every question must be answerable from the article text. Exactly one option is correct; the other three are plausible but clearly wrong. ' ||
         'Vary the position of the correct option. Never ask about the author, the website or publication dates. Reply with JSON only.'),
       jsonb_build_object('role', 'user', 'content',
@@ -795,7 +804,7 @@ begin
         begin
           qid := public._quiz_from_ai(art, lang);
         exception when others then
-          raise warning 'EcoStep AI quiz failed: %', sqlerrm;
+          raise warning 'EcoFun AI quiz failed: %', sqlerrm;
           qid := null;
         end;
       end if;
@@ -899,7 +908,7 @@ begin
 
   msgs := jsonb_build_array(jsonb_build_object('role', 'user', 'content', jsonb_build_array(
     jsonb_build_object('type', 'text', 'text',
-      'You are EcoStep''s waste-sorting expert for households in Rwanda. Identify the single main waste item in the photo. ' ||
+      'You are EcoFun''s waste-sorting expert for households in Rwanda. Identify the single main waste item in the photo. ' ||
       'Biodegradable: food scraps, fruit and vegetable peels, leaves, grass, untreated wood, plain paper and cardboard, natural cloth. ' ||
       'Non-biodegradable: plastics (bottles, bags, packaging), glass, metal, cans, batteries, electronics, rubber, styrofoam, synthetic fabric. ' ||
       'If no waste item is clearly visible, or the material cannot be judged, use "uncertain". ' ||
@@ -1075,6 +1084,199 @@ end;
 $$;
 
 -- ----------------------------------------------------------------------------
+-- 12b. Emails: welcome, password changed, streak milestones, goodbye
+--   Events are written to email_outbox; pg_net pings the ecofun-mailer Edge Function, which
+--   sends them through Gmail SMTP. A cron job retries anything that failed.
+--   (Sign-up / reset codes are sent by Supabase Auth itself, through the same Gmail account.)
+-- ----------------------------------------------------------------------------
+create table if not exists public.email_outbox (
+  id          bigint generated always as identity primary key,
+  user_id     uuid references auth.users (id) on delete set null,
+  to_email    text not null,
+  kind        text not null check (kind in ('welcome', 'password_changed', 'streak', 'goodbye')),
+  data        jsonb not null default '{}',
+  dedupe_key  text unique,
+  status      text not null default 'pending' check (status in ('pending', 'sending', 'sent', 'failed')),
+  attempts    integer not null default 0,
+  last_error  text,
+  created_at  timestamptz not null default now(),
+  claimed_at  timestamptz,
+  sent_at     timestamptz
+);
+create index if not exists email_outbox_open_idx on public.email_outbox (id) where status <> 'sent';
+alter table public.email_outbox enable row level security;   -- no policies: app users can't see it
+revoke all on public.email_outbox from anon, authenticated;
+
+create or replace function public._user_lang(p_meta jsonb)
+returns text language sql immutable set search_path = '' as $$
+  select case when p_meta ->> 'lang' = 'rw' then 'rw' else 'en' end;
+$$;
+
+create or replace function public._display_name(p_meta jsonb, p_email text)
+returns text language sql immutable set search_path = '' as $$
+  select left(coalesce(nullif(trim(p_meta ->> 'full_name'), ''), nullif(trim(p_meta ->> 'name'), ''),
+                       split_part(p_email, '@', 1), 'EcoFun member'), 80);
+$$;
+
+-- Wakes the Edge Function (async; the request leaves only after the transaction commits).
+create or replace function public._kick_mailer()
+returns void language plpgsql volatile security definer set search_path = '' as $$
+declare v_url text; v_secret text;
+begin
+  select decrypted_secret into v_url from vault.decrypted_secrets where name = 'mailer_url' limit 1;
+  select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'mailer_secret' limit 1;
+  if coalesce(v_url, '') = '' or coalesce(v_secret, '') = '' then return; end if;
+  perform net.http_post(
+    url := v_url,
+    body := '{}'::jsonb,
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-mailer-secret', v_secret),
+    timeout_milliseconds := 30000);
+exception when others then
+  raise warning 'EcoFun mailer ping failed: %', sqlerrm;
+end;
+$$;
+
+-- Never raises: an email problem must not block sign-up, password changes or missions.
+create or replace function public._queue_email(p_user uuid, p_to text, p_kind text, p_data jsonb, p_dedupe text default null)
+returns void language plpgsql volatile security definer set search_path = '' as $$
+begin
+  if p_to is null or position('@' in p_to) = 0 then return; end if;
+  insert into public.email_outbox (user_id, to_email, kind, data, dedupe_key)
+  values (p_user, lower(p_to), p_kind, coalesce(p_data, '{}'), p_dedupe)
+  on conflict (dedupe_key) do nothing;
+  if found then perform public._kick_mailer(); end if;
+exception when others then
+  raise warning 'EcoFun email (%) not queued: %', p_kind, sqlerrm;
+end;
+$$;
+
+create or replace function public._on_auth_user_mail()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare meta jsonb;
+begin
+  if tg_op = 'DELETE' then
+    if old.email is not null and old.email_confirmed_at is not null then
+      meta := coalesce(old.raw_user_meta_data, '{}');
+      perform public._queue_email(null, old.email, 'goodbye',
+        jsonb_build_object('name', public._display_name(meta, old.email), 'lang', public._user_lang(meta)),
+        'goodbye:' || old.id);
+    end if;
+    return old;
+  end if;
+
+  meta := coalesce(new.raw_user_meta_data, '{}');
+  if new.email_confirmed_at is not null and (tg_op = 'INSERT' or old.email_confirmed_at is null) then
+    perform public._queue_email(new.id, new.email, 'welcome',
+      jsonb_build_object('name', public._display_name(meta, new.email), 'lang', public._user_lang(meta)),
+      'welcome:' || new.id);
+  end if;
+  if tg_op = 'UPDATE' and new.email_confirmed_at is not null
+     and coalesce(old.encrypted_password, '') <> ''
+     and new.encrypted_password is distinct from old.encrypted_password then
+    perform public._queue_email(new.id, new.email, 'password_changed',
+      jsonb_build_object('name', public._display_name(meta, new.email), 'lang', public._user_lang(meta),
+                         'email', new.email, 'at', now()),
+      'password:' || new.id || ':' || floor(extract(epoch from now()) / 60)::bigint);
+  end if;
+  return new;
+exception when others then
+  raise warning 'EcoFun auth email trigger: %', sqlerrm;
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$$;
+
+drop trigger if exists on_auth_user_mail on auth.users;
+create trigger on_auth_user_mail
+  after insert or update of email_confirmed_at, encrypted_password or delete on auth.users
+  for each row execute function public._on_auth_user_mail();
+
+-- Streak milestones after a mission (members can switch these off in Profile → Email updates).
+create or replace function public._on_mission_mail()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare s integer; u record; pts integer;
+begin
+  s := public._streak(new.user_id);
+  if s in (3, 7, 14, 30, 50, 100, 200, 365) then
+    select email, coalesce(raw_user_meta_data, '{}') as meta into u from auth.users where id = new.user_id;
+    if u.email is not null and coalesce(u.meta ->> 'email_updates', 'true') <> 'false' then
+      select points into pts from public.profiles where id = new.user_id;
+      perform public._queue_email(new.user_id, u.email, 'streak',
+        jsonb_build_object('name', public._display_name(u.meta, u.email), 'lang', public._user_lang(u.meta),
+                           'streak', s, 'points', coalesce(pts, 0)),
+        'streak:' || new.user_id || ':' || s || ':' || public.eco_today());
+    end if;
+  end if;
+  return new;
+exception when others then
+  raise warning 'EcoFun streak email: %', sqlerrm;
+  return new;
+end;
+$$;
+
+drop trigger if exists mission_completions_mail on public.mission_completions;
+create trigger mission_completions_mail after insert on public.mission_completions
+  for each row execute function public._on_mission_mail();
+
+-- Used only by the ecofun-mailer Edge Function, which proves itself with the shared secret.
+create or replace function public._mailer_secret_ok(p_secret text)
+returns boolean language plpgsql stable security definer set search_path = '' as $$
+declare v text;
+begin
+  select decrypted_secret into v from vault.decrypted_secrets where name = 'mailer_secret' limit 1;
+  return coalesce(v, '') <> '' and p_secret is not null and p_secret = v;
+end;
+$$;
+
+create or replace function public.mailer_claim(p_secret text, p_limit integer default 20)
+returns setof public.email_outbox language plpgsql volatile security definer set search_path = '' as $$
+begin
+  if not public._mailer_secret_ok(p_secret) then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+  return query
+  with claimed as (
+  update public.email_outbox o
+     set status = 'sending', attempts = o.attempts + 1, claimed_at = now()
+   where o.id in (
+     select e.id from public.email_outbox e
+      where e.status = 'pending'
+         or (e.status in ('sending', 'failed') and e.attempts < 5 and e.claimed_at < now() - interval '10 minutes')
+      order by e.id
+      limit least(greatest(coalesce(p_limit, 20), 1), 50)
+      for update skip locked)
+  returning o.*)
+  select * from claimed;
+end;
+$$;
+
+create or replace function public.mailer_done(p_secret text, p_id bigint, p_error text default null)
+returns void language plpgsql volatile security definer set search_path = '' as $$
+begin
+  if not public._mailer_secret_ok(p_secret) then
+    raise exception 'Not allowed.' using errcode = '42501';
+  end if;
+  update public.email_outbox
+     set status = case when p_error is null then 'sent' else 'failed' end,
+         sent_at = case when p_error is null then now() end,
+         last_error = left(p_error, 500)
+   where id = p_id;
+end;
+$$;
+
+-- Every 10 minutes: retry anything unsent, and forget sent emails after 30 days.
+create or replace function public._mailer_cron()
+returns void language plpgsql volatile security definer set search_path = '' as $$
+begin
+  delete from public.email_outbox where status = 'sent' and sent_at < now() - interval '30 days';
+  if exists (select 1 from public.email_outbox
+              where status = 'pending'
+                 or (status in ('sending', 'failed') and attempts < 5 and claimed_at < now() - interval '10 minutes')) then
+    perform public._kick_mailer();
+  end if;
+end;
+$$;
+
+-- ----------------------------------------------------------------------------
 -- 13. Function privileges: only the public API is callable by signed-in users
 -- ----------------------------------------------------------------------------
 do $$
@@ -1101,6 +1303,9 @@ grant execute on function public.get_feed(integer, timestamptz) to authenticated
 grant execute on function public.rate_post(uuid, integer) to authenticated;
 grant execute on function public.admin_grant_points(text, integer, text) to authenticated;
 grant execute on function public.delete_my_account() to authenticated;
+-- The mailer functions check the shared secret themselves.
+grant execute on function public.mailer_claim(text, integer) to anon, authenticated, service_role;
+grant execute on function public.mailer_done(text, bigint, text) to anon, authenticated, service_role;
 revoke execute on function public.get_home(), public.mark_news_read(text), public.get_quiz(text),
   public.answer_quiz(uuid, integer, integer), public.finish_quiz(uuid), public.classify_waste(text, text, text, text),
   public.complete_mission(text, text, uuid), public.create_post(text, text), public.get_feed(integer, timestamptz),
@@ -1112,8 +1317,8 @@ revoke execute on function public.get_home(), public.mark_news_read(text), publi
 -- ----------------------------------------------------------------------------
 insert into public.missions (icon, title_en, title_rw, description_en, description_rw, points, needs_scan) values
   ('🗑️', 'Sort your household waste', 'Vangura imyanda yo mu rugo',
-   'Separate today''s waste into biodegradable and non-biodegradable. Snap a photo of one item — EcoStep''s AI will check its type.',
-   'Tandukanya imyanda y''uyu munsi: ibora n''itabora. Fata ifoto y''ikintu kimwe — AI ya EcoStep irakubwira ubwoko bwacyo.', 25, true),
+   'Separate today''s waste into biodegradable and non-biodegradable. Snap a photo of one item — EcoFun''s AI will check its type.',
+   'Tandukanya imyanda y''uyu munsi: ibora n''itabora. Fata ifoto y''ikintu kimwe — AI ya EcoFun irakubwira ubwoko bwacyo.', 25, true),
   ('🛍️', 'Say no to a plastic bag', 'Anga isashe ya pulasitiki',
    'Carry a reusable bag or basket when you shop today. Rwanda banned single-use plastic bags in 2008 — keep it that way.',
    'Jyana igikapu cyangwa agaseke uyu munsi uhaha. U Rwanda rwaciye amasashe mu 2008 — dukomeze kubyubahiriza.', 20, false),
@@ -1174,12 +1379,14 @@ insert into public.quiz_bank (language, question, options, correct_index, explan
 on conflict (question) do nothing;
 
 -- ----------------------------------------------------------------------------
--- 15. Schedule the news refresh (every hour) and fill the feed right now
+-- 15. Schedule the news refresh (hourly) and email retries, then fill the feed right now
 -- ----------------------------------------------------------------------------
 do $$
 begin
-  perform cron.unschedule(jobid) from cron.job where jobname = 'ecostep-refresh-news';
-  perform cron.schedule('ecostep-refresh-news', '7 * * * *', 'select public.refresh_news();');
+  perform cron.unschedule(jobid) from cron.job where jobname in ('ecostep-refresh-news', 'ecofun-refresh-news');
+  perform cron.schedule('ecofun-refresh-news', '7 * * * *', 'select public.refresh_news();');
+  perform cron.unschedule(jobid) from cron.job where jobname = 'ecofun-mailer';
+  perform cron.schedule('ecofun-mailer', '*/10 * * * *', 'select public._mailer_cron();');
 end $$;
 
 select public.refresh_news() as articles_saved;

@@ -16,11 +16,12 @@ abstract final class AuthRepository {
     await supa.auth.signInWithPassword(email: email.trim().toLowerCase(), password: password);
   }
 
-  static Future<SignUpOutcome> signUp(String name, String email, String password) async {
+  /// [lang] ('en' or 'rw') picks the language of every email EcoFun sends this person.
+  static Future<SignUpOutcome> signUp(String name, String email, String password, {String lang = 'en'}) async {
     final res = await supa.auth.signUp(
       email: email.trim().toLowerCase(),
       password: password,
-      data: {'full_name': name.trim()},
+      data: {'full_name': name.trim(), 'lang': lang},
     );
     // Supabase returns a user with no identities when the email is already registered.
     if (res.user != null && (res.user!.identities?.isEmpty ?? false)) {
@@ -45,6 +46,24 @@ abstract final class AuthRepository {
   static Future<void> resetPassword(String email, String code, String newPassword) async {
     await supa.auth.verifyOTP(email: email.trim().toLowerCase(), token: code.trim(), type: OtpType.recovery);
     await supa.auth.updateUser(UserAttributes(password: newPassword));
+  }
+
+  /// Keeps the email language in step with the app language (stored in the user's metadata).
+  static Future<void> syncLanguage(String lang) async {
+    final user = supa.auth.currentUser;
+    if (user == null || user.userMetadata?['lang'] == lang) return;
+    try {
+      await supa.auth.updateUser(UserAttributes(data: {'lang': lang}));
+    } catch (_) {
+      // Not critical; retried on the next app start.
+    }
+  }
+
+  /// Streak and progress emails (security emails are always sent).
+  static bool get emailUpdates => supa.auth.currentUser?.userMetadata?['email_updates'] != false;
+
+  static Future<void> setEmailUpdates(bool on) async {
+    await supa.auth.updateUser(UserAttributes(data: {'email_updates': on}));
   }
 
   static bool _googleReady = false;

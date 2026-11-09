@@ -1,5 +1,5 @@
-name: eco_step
-description: "EcoStep — small daily climate actions for Rwanda: local environment news, AI quizzes, AI waste identification and community missions."
+name: eco_fun
+description: "EcoFun — small daily climate actions for Rwanda: local environment news, AI quizzes, AI waste identification and community missions."
 publish_to: 'none'
 version: 1.0.0+2
 

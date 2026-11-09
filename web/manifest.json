@@ -1,6 +1,6 @@
 {
-    "name": "eco_step",
-    "short_name": "eco_step",
+    "name": "eco_fun",
+    "short_name": "eco_fun",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
