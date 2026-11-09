@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart' hide Trans;
 
 import '../core/theme/app_theme.dart';
+import '../core/utils/update_checker.dart';
 import '../core/widgets/system_bars.dart';
 import '../data/supa.dart';
 import 'app_prefs.dart';
@@ -59,6 +60,8 @@ class EcoFunApp extends StatelessWidget {
         Get.put(NewsController(), permanent: true);
         Get.put(NotificationController(), permanent: true);
         if (signedIn) session.start();
+        // A moment after launch, offer a newer APK if one was published.
+        Future<void>.delayed(const Duration(seconds: 2), UpdateChecker.check);
       },
       builder: (context, child) {
         final brightness = MediaQuery.platformBrightnessOf(context);

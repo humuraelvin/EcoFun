@@ -1861,6 +1861,24 @@ end;
 $$;
 
 -- ----------------------------------------------------------------------------
+-- 12d. App updates: the latest Android release (the app shows "Update available")
+-- ----------------------------------------------------------------------------
+create table if not exists public.app_releases (
+  platform          text primary key check (platform in ('android', 'ios')),
+  version_code      integer not null,
+  version_name      text not null,
+  download_url      text not null,
+  min_version_code  integer not null default 0,   -- older builds must update (forced)
+  notes_en          text not null default '',
+  notes_rw          text not null default '',
+  released_at       timestamptz not null default now()
+);
+alter table public.app_releases enable row level security;
+drop policy if exists "releases readable" on public.app_releases;
+create policy "releases readable" on public.app_releases for select to anon, authenticated using (true);
+grant select on public.app_releases to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
 -- 12c. Emails: welcome, password changed, streak milestones, announcements, goodbye
 --   Events are written to email_outbox; pg_net pings the ecofun-mailer Edge Function, which
 --   sends them through Gmail SMTP. A cron job retries anything that failed.

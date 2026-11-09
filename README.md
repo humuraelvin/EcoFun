@@ -20,6 +20,32 @@ Accounts exist in EcoFun only after the email code is verified; unfinished sign-
 
 ---
 
+## Download (Android)
+
+**Permanent link (always the newest version):**
+https://github.com/humuraelvin/EcoFun/releases/latest/download/EcoFun.apk
+
+<img src="docs/ecofun-android-qr.png" width="240" alt="QR code to download EcoFun for Android">
+
+1. Open the link (or scan the QR code) on an Android phone and download `EcoFun.apk`.
+2. Open the downloaded file. If asked, allow your browser to *install unknown apps*.
+3. If Play Protect warns about an unknown developer, tap **More details → Install anyway**.
+
+The app checks for new versions on launch and offers a one-tap update.
+
+### Publishing a new Android version
+1. Bump `version:` in `pubspec.yaml` — the number after `+` must increase (e.g. `1.2.0+2010` → `1.2.1+2011`).
+2. Run:
+   ```bash
+   GITHUB_TOKEN=github_pat_xxx NOTES_EN="What changed" NOTES_RW="Ibyahindutse" bash scripts/release-android.sh
+   ```
+   Add `--force-update` to require everyone to update. The token is a fine-grained GitHub token with
+   *Contents: read and write* on this repository.
+3. The release must be signed with the EcoFun key (`android/key.properties` + `android/app/ecofun-release.jks`,
+   both git-ignored). **Back that key up** — without it, existing installs can't be updated.
+
+---
+
 ## Architecture
 
 | Layer | Technology |

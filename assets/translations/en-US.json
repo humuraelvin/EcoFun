@@ -518,5 +518,14 @@
     "rating_received": "Rating received",
     "admin_grant": "Given by admin",
     "admin_deduct": "Removed by admin"
+  },
+  "update": {
+    "title": "Update available",
+    "body": "EcoFun {} is ready with improvements and fixes.",
+    "required": "Please update to EcoFun {} to keep using the app.",
+    "whatsNew": "What's new",
+    "now": "Update now",
+    "later": "Later",
+    "hint": "The new version downloads in your browser. Open it and tap Install — your account stays signed in."
   }
 }

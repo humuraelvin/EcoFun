@@ -518,5 +518,14 @@
     "rating_received": "Inyenyeri wahawe",
     "admin_grant": "Byatanzwe n'umuyobozi",
     "admin_deduct": "Byakuweho n'umuyobozi"
+  },
+  "update": {
+    "title": "Hari ivugurura rishya",
+    "body": "EcoFun {} iriteguye, ifite ibyanogejwe n'ibyakosowe.",
+    "required": "Vugurura ujye kuri EcoFun {} kugira ngo ukomeze kuyikoresha.",
+    "whatsNew": "Ibishya",
+    "now": "Vugurura ubu",
+    "later": "Nyuma",
+    "hint": "Verisiyo nshya irakururwa muri mushakisha yawe. Yifungure ukande Install — konti yawe ikomeza kwinjira."
   }
 }
