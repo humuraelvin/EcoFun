@@ -1,0 +1,28 @@
+# EcoFun app icon for every platform. Regenerate with: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/app_icon/icon.png"
+
+  android: "launcher_icon"
+  min_sdk_android: 21
+  adaptive_icon_background: "assets/app_icon/background.png"
+  adaptive_icon_foreground: "assets/app_icon/foreground.png"
+  adaptive_icon_monochrome: "assets/app_icon/monochrome.png"
+
+  ios: true
+  remove_alpha_ios: true
+  background_color_ios: "#0C9F5C"
+
+  web:
+    generate: true
+    image_path: "assets/app_icon/icon.png"
+    background_color: "#0C9F5C"
+    theme_color: "#0C9F5C"
+
+  windows:
+    generate: true
+    image_path: "assets/app_icon/icon.png"
+    icon_size: 256
+
+  macos:
+    generate: true
+    image_path: "assets/app_icon/icon.png"
