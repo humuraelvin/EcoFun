@@ -6,18 +6,16 @@
 #   3. tells installed apps about it (Supabase table app_releases -> "Update available")
 #
 # Before running: bump `version:` in pubspec.yaml (e.g. 1.2.1+2011; the number after + must grow).
-# Needs: android/key.properties + android/app/ecofun-release.jks (the signing key),
-#        GITHUB_TOKEN (fine-grained token with "Contents: read and write" on humuraelvin/EcoFun),
+# Needs: git push access to the repo, android/key.properties + android/app/ecofun-release.jks (the signing key),
 #        supabase/mail.local.env (SUPABASE_ACCESS_TOKEN) for step 3.
 # Usage:
-#   GITHUB_TOKEN=github_pat_xxx NOTES_EN="What changed" NOTES_RW="Ibyahindutse" bash scripts/release-android.sh [--force-update]
+#   NOTES_EN="What changed" NOTES_RW="Ibyahindutse" bash scripts/release-android.sh [--force-update]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 REPO="humuraelvin/EcoFun"
 FORCE=0; [[ "${1:-}" == "--force-update" ]] && FORCE=1
 [[ -f android/key.properties ]] || { echo "Missing android/key.properties (release signing key). See ~/EcoFun-signing-key/"; exit 1; }
-: "${GITHUB_TOKEN:?Set GITHUB_TOKEN (github.com/settings/personal-access-tokens, Contents: read and write)}"
 
 VERSION_LINE=$(grep -E '^version:' pubspec.yaml | awk '{print $2}')
 NAME=${VERSION_LINE%%+*}; CODE=${VERSION_LINE##*+}
@@ -27,36 +25,40 @@ NOTES_RW=${NOTES_RW:-"Ibyanogejwe n'ibyakosowe."}
 echo "▸ EcoFun $NAME (build $CODE)"
 
 echo "▸ Building the universal release APK"
-flutter build apk --release --target-platform android-arm,android-arm64 --android-skip-build-dependency-validation >/dev/null
+[[ "${SKIP_BUILD:-0}" == "1" && -f build/app/outputs/flutter-apk/app-release.apk ]] || flutter build apk --release --target-platform android-arm,android-arm64 --android-skip-build-dependency-validation >/dev/null
 mkdir -p build/release
 cp build/app/outputs/flutter-apk/app-release.apk build/release/EcoFun.apk
 SIZE=$(du -h build/release/EcoFun.apk | cut -f1)
 SHA=$(sha256sum build/release/EcoFun.apk | cut -d' ' -f1)
 echo "  ✓ build/release/EcoFun.apk ($SIZE)"
 
-gh() { curl -sS -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" "$@"; }
-
-echo "▸ Publishing GitHub Release $TAG"
-BODY=$(jq -n --arg en "$NOTES_EN" --arg rw "$NOTES_RW" --arg sha "$SHA" --arg size "$SIZE" \
-  '"### What'"'"'s new\n" + $en + "\n\n### Ibishya\n" + $rw +
-   "\n\n**Install:** open https://github.com/'"$REPO"'/releases/latest/download/EcoFun.apk on your Android phone, then tap Install.\n\nSize: " + $size + " · SHA-256: `" + $sha + "`"')
-RELEASE=$(gh "https://api.github.com/repos/$REPO/releases/tags/$TAG" || true)
-RID=$(echo "$RELEASE" | jq -r '.id // empty')
-if [[ -z "$RID" ]]; then
-  RELEASE=$(gh -X POST "https://api.github.com/repos/$REPO/releases" \
-    -d "$(jq -n --arg tag "$TAG" --arg name "EcoFun $NAME" --argjson body "$BODY" \
-          '{tag_name:$tag, name:$name, body:$body, draft:false, prerelease:false, make_latest:"true"}')")
-  RID=$(echo "$RELEASE" | jq -r '.id // empty')
-fi
-[[ -n "$RID" ]] || { echo "  ✗ Could not create the release: $(echo "$RELEASE" | head -c 400)"; exit 1; }
-# replace an existing EcoFun.apk asset on this release
-OLD=$(gh "https://api.github.com/repos/$REPO/releases/$RID/assets" | jq -r '.[] | select(.name=="EcoFun.apk") | .id')
-[[ -n "$OLD" ]] && gh -X DELETE "https://api.github.com/repos/$REPO/releases/assets/$OLD" >/dev/null
-UP=$(curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" -H "Content-Type: application/vnd.android.package-archive" \
-  --data-binary @build/release/EcoFun.apk "https://uploads.github.com/repos/$REPO/releases/$RID/assets?name=EcoFun.apk")
-echo "$UP" | jq -e '.browser_download_url' >/dev/null || { echo "  ✗ Upload failed: $(echo "$UP" | head -c 400)"; exit 1; }
 LINK="https://github.com/$REPO/releases/latest/download/EcoFun.apk"
-echo "  ✓ $LINK"
+echo "▸ Publishing GitHub Release $TAG"
+# The APK goes to the `apk-release` branch (a single commit, replaced each time); the workflow in
+# .github/workflows/publish-apk.yml turns it into the GitHub Release with GitHub's own token.
+WORK=$(mktemp -d)
+mkdir -p "$WORK/.github/workflows"
+cp .github/workflows/publish-apk.yml "$WORK/.github/workflows/"
+cp build/release/EcoFun.apk "$WORK/EcoFun.apk"
+NOTES=$(printf '### What'"'"'s new\n%s\n\n### Ibishya\n%s\n\n**Install on Android:** open %s on your phone, then tap Install.\n\nSize: %s · SHA-256: `%s`' \
+  "$NOTES_EN" "$NOTES_RW" "$LINK" "$SIZE" "$SHA")
+jq -n --arg n "$NAME" --argjson c "$CODE" --arg notes "$(printf '%b' "$NOTES")" \
+  '{version_name:$n, version_code:$c, notes:$notes}' > "$WORK/release.json"
+ORIGIN=$(git remote get-url origin)
+( cd "$WORK" && git init -q -b apk-release && git add . \
+  && git -c user.name="$(git -C "$OLDPWD" config user.name)" -c user.email="$(git -C "$OLDPWD" config user.email)" \
+       commit -q -m "EcoFun $NAME APK" \
+  && git push -q -f "$ORIGIN" apk-release )
+rm -rf "$WORK"
+echo "  ✓ pushed; waiting for GitHub to publish the release…"
+for i in $(seq 1 40); do
+  sleep 6
+  CODE_HTTP=$(curl -s -o /dev/null -w '%{http_code}' -L "https://api.github.com/repos/$REPO/releases/tags/$TAG")
+  if [[ "$CODE_HTTP" == "200" ]] && curl -s "https://api.github.com/repos/$REPO/releases/tags/$TAG" | jq -e '.assets[] | select(.name=="EcoFun.apk")' >/dev/null; then
+    echo "  ✓ $LINK"; break
+  fi
+  [[ $i -eq 40 ]] && { echo "  ✗ Not published yet — check https://github.com/$REPO/actions"; exit 1; }
+done
 
 echo "▸ Announcing the update to installed apps"
 T=$(grep -E '^SUPABASE_ACCESS_TOKEN=' supabase/mail.local.env | cut -d= -f2-)

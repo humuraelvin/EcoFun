@@ -37,10 +37,10 @@ The app checks for new versions on launch and offers a one-tap update.
 1. Bump `version:` in `pubspec.yaml` — the number after `+` must increase (e.g. `1.2.0+2010` → `1.2.1+2011`).
 2. Run:
    ```bash
-   GITHUB_TOKEN=github_pat_xxx NOTES_EN="What changed" NOTES_RW="Ibyahindutse" bash scripts/release-android.sh
+   NOTES_EN="What changed" NOTES_RW="Ibyahindutse" bash scripts/release-android.sh
    ```
-   Add `--force-update` to require everyone to update. The token is a fine-grained GitHub token with
-   *Contents: read and write* on this repository.
+   Add `--force-update` to require everyone to update. The script pushes the APK to the `apk-release`
+   branch and the *Publish Android APK* workflow turns it into the GitHub Release (no personal token needed).
 3. The release must be signed with the EcoFun key (`android/key.properties` + `android/app/ecofun-release.jks`,
    both git-ignored). **Back that key up** — without it, existing installs can't be updated.
 
