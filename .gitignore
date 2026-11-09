@@ -64,3 +64,6 @@ firebase_options.dart
 !firebase.json
 !lib/firebase_options.dart
 functions/node_modules/
+
+# Secrets (Supabase Vault script with the NVIDIA key)
+supabase/*.local.sql
