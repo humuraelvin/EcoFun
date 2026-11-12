@@ -177,7 +177,7 @@ class _AdminUserViewState extends State<AdminUserView> {
     try {
       await AdminRepository.deleteUser(_id);
       _changed();
-      Get.back();
+      if (mounted) Navigator.of(context).pop();
       showToast('admin.deleted'.tr());
     } catch (e) {
       showToast(friendlyError(e), error: true);

@@ -249,6 +249,24 @@ create index if not exists notifications_unread_idx on public.notifications (use
 alter table public.profiles add column if not exists suspended_at timestamptz;
 alter table public.profiles add column if not exists suspended_reason text;
 alter table public.community_posts add column if not exists comment_count integer not null default 0;
+alter table public.community_posts add column if not exists report_count integer not null default 0;
+-- Hidden from the feed while an admin reviews it (3+ open reports).
+alter table public.community_posts add column if not exists hidden boolean not null default false;
+
+create table if not exists public.post_reports (
+  id           uuid primary key default gen_random_uuid(),
+  post_id      uuid not null references public.community_posts (id) on delete cascade,
+  reporter_id  uuid not null references public.profiles (id) on delete cascade,
+  reason       text not null check (reason in ('irrelevant', 'offensive', 'spam', 'violence', 'other')),
+  details      text not null default '' check (char_length(details) <= 300),
+  status       text not null default 'open' check (status in ('open', 'dismissed', 'actioned')),
+  created_at   timestamptz not null default now(),
+  resolved_at  timestamptz,
+  resolved_by  uuid references public.profiles (id) on delete set null,
+  unique (post_id, reporter_id)
+);
+create index if not exists post_reports_open_idx on public.post_reports (post_id) where status = 'open';
+alter table public.post_reports enable row level security;   -- reports are private: only via functions
 alter table public.waste_scans add column if not exists disposed_at timestamptz;
 alter table public.waste_scans add column if not exists disposal_image_path text;
 alter table public.waste_scans add column if not exists disposal_feedback text;
@@ -1529,6 +1547,11 @@ begin
   if p_image_path is null or split_part(p_image_path, '/', 1) <> uid::text then
     raise exception 'Upload a photo first.' using errcode = 'P0001';
   end if;
+  -- A repeated tap (or a retry after a slow network) must not create the same post twice.
+  select id into pid from public.community_posts
+  where user_id = uid and caption = v_caption and created_at > now() - interval '20 seconds'
+  order by created_at desc limit 1;
+  if pid is not null then return pid; end if;
   if (select count(*) from public.community_posts where user_id = uid and created_at > now() - interval '1 day') >= 10 then
     raise exception 'You can share up to 10 photos a day.' using errcode = 'P0001';
   end if;
@@ -1547,7 +1570,9 @@ begin
     select jsonb_agg(public._post_json(c, uid) order by c.created_at desc)
     from (select c.* from public.community_posts c
           join public.profiles pr on pr.id = c.user_id and pr.suspended_at is null
-          where p_before is null or c.created_at < p_before
+          where (p_before is null or c.created_at < p_before)
+            and (not c.hidden or c.user_id = uid)
+            and not exists (select 1 from public.post_reports r where r.post_id = c.id and r.reporter_id = uid)
           order by c.created_at desc
           limit least(greatest(p_limit, 1), 50)) c), '[]'::jsonb);
 end;
@@ -1712,6 +1737,92 @@ end $$;
 -- ----------------------------------------------------------------------------
 -- 12b. Admin portal (every function checks that the caller is an admin)
 -- ----------------------------------------------------------------------------
+-- Members report someone else's post; admins are told immediately.
+create or replace function public.report_post(p_post_id uuid, p_reason text, p_details text default '')
+returns jsonb language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_user(); post public.community_posts; inserted integer; open_reports integer;
+begin
+  if p_reason not in ('irrelevant', 'offensive', 'spam', 'violence', 'other') then
+    raise exception 'Choose a reason.' using errcode = 'P0001';
+  end if;
+  select * into post from public.community_posts where id = p_post_id for update;
+  if post.id is null then raise exception 'This post is no longer available.' using errcode = 'P0001'; end if;
+  if post.user_id = uid then raise exception 'You cannot report your own post.' using errcode = 'P0001'; end if;
+  insert into public.post_reports (post_id, reporter_id, reason, details)
+  values (p_post_id, uid, p_reason, left(btrim(coalesce(p_details, '')), 300))
+  on conflict (post_id, reporter_id) do nothing;
+  get diagnostics inserted = row_count;
+  if inserted = 0 then return jsonb_build_object('already_reported', true); end if;
+
+  select count(*) into open_reports from public.post_reports where post_id = p_post_id and status = 'open';
+  update public.community_posts set report_count = report_count + 1, hidden = hidden or open_reports >= 3
+  where id = p_post_id;
+  perform public._notify_admins('post_reported', uid, p_post_id,
+    jsonb_build_object('reason', p_reason, 'details', left(btrim(coalesce(p_details, '')), 120),
+                       'caption', left(post.caption, 120), 'reports', open_reports));
+  return jsonb_build_object('already_reported', false);
+end;
+$$;
+
+create or replace function public.admin_reports(p_status text default 'open')
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := public._require_admin();
+begin
+  return coalesce((
+    select jsonb_agg(public._post_json(c, uid) || jsonb_build_object(
+      'author_email', u.email, 'author_suspended', pr.suspended_at is not null, 'hidden', c.hidden,
+      'reports', (select jsonb_agg(jsonb_build_object('reason', r.reason, 'details', r.details, 'created_at', r.created_at,
+                                                      'reporter_name', rp.full_name) order by r.created_at desc)
+                  from public.post_reports r join public.profiles rp on rp.id = r.reporter_id
+                  where r.post_id = c.id and r.status = p_status),
+      'last_report_at', (select max(r.created_at) from public.post_reports r where r.post_id = c.id and r.status = p_status))
+      order by (select max(r.created_at) from public.post_reports r where r.post_id = c.id and r.status = p_status) desc)
+    from public.community_posts c
+    join public.profiles pr on pr.id = c.user_id
+    join auth.users u on u.id = c.user_id
+    where exists (select 1 from public.post_reports r where r.post_id = c.id and r.status = p_status)), '[]'::jsonb);
+end;
+$$;
+
+-- dismiss: the post is fine. remove: delete the post. ban: delete the post and ban its author for good.
+create or replace function public.admin_resolve_reports(p_post_id uuid, p_action text, p_note text default '')
+returns jsonb language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_admin(); post public.community_posts; author public.profiles; r record;
+begin
+  if p_action not in ('dismiss', 'remove', 'ban') then raise exception 'Choose an action.' using errcode = 'P0001'; end if;
+  select * into post from public.community_posts where id = p_post_id;
+  if post.id is null then raise exception 'This post is no longer available.' using errcode = 'P0001'; end if;
+  select * into author from public.profiles where id = post.user_id;
+
+  -- tell everyone who reported it that it was handled
+  for r in select distinct reporter_id from public.post_reports where post_id = post.id and status = 'open' loop
+    perform public._notify(r.reporter_id, case when p_action = 'dismiss' then 'report_dismissed' else 'report_actioned' end,
+                           null, null, jsonb_build_object('caption', left(post.caption, 120)));
+  end loop;
+  update public.post_reports set status = case when p_action = 'dismiss' then 'dismissed' else 'actioned' end,
+         resolved_at = now(), resolved_by = uid
+  where post_id = post.id and status = 'open';
+
+  if p_action = 'dismiss' then
+    update public.community_posts set hidden = false where id = post.id;
+    return jsonb_build_object('ok', true, 'action', p_action);
+  end if;
+
+  if p_action = 'ban' then
+    if author.is_admin then raise exception 'Admins cannot be suspended.' using errcode = 'P0001'; end if;
+    update public.profiles set suspended_at = now(),
+           suspended_reason = left(coalesce(nullif(btrim(p_note), ''), 'Posted irrelevant or policy-violating content'), 300)
+    where id = author.id;
+    update auth.users set banned_until = 'infinity'::timestamptz where id = author.id;
+  else
+    perform public._notify(author.id, 'post_removed', null, null,
+      jsonb_build_object('caption', left(post.caption, 120), 'reason', left(btrim(coalesce(p_note, '')), 200)));
+  end if;
+  delete from public.community_posts where id = post.id;
+  return jsonb_build_object('ok', true, 'action', p_action, 'image_path', post.image_path);
+end;
+$$;
+
 create or replace function public.admin_dashboard()
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare uid uuid := public._require_admin(); today date := public.eco_today();
@@ -1728,6 +1839,7 @@ begin
     'suspended', (select count(*) from public.profiles where suspended_at is not null),
     'unverified', (select count(*) from auth.users where email_confirmed_at is null),
     'posts', (select count(*) from public.community_posts),
+    'open_reports', (select count(distinct post_id) from public.post_reports where status = 'open'),
     'posts_today', (select count(*) from public.community_posts where created_at > now() - interval '1 day'),
     'comments', (select count(*) from public.post_comments),
     'ratings', (select count(*) from public.post_ratings),
@@ -2224,6 +2336,9 @@ grant execute on function public.get_comments(uuid) to authenticated;
 grant execute on function public.add_comment(uuid, text) to authenticated;
 grant execute on function public.delete_comment(uuid) to authenticated;
 grant execute on function public.get_leaderboard(integer) to authenticated;
+grant execute on function public.report_post(uuid, text, text) to authenticated;
+grant execute on function public.admin_reports(text) to authenticated;
+grant execute on function public.admin_resolve_reports(uuid, text, text) to authenticated;
 grant execute on function public.get_notifications(integer, timestamptz) to authenticated;
 grant execute on function public.mark_notifications_read(bigint[]) to authenticated;
 grant execute on function public.clear_notifications() to authenticated;

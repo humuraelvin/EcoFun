@@ -18,7 +18,8 @@
     "pts": "amanota",
     "points": "amanota",
     "next": "Komeza",
-    "member": "Umunyamuryango wa EcoFun"
+    "member": "Umunyamuryango wa EcoFun",
+    "ok": "Sawa"
   },
   "time": {
     "now": "Ubu nyine",
@@ -296,7 +297,9 @@
     "commentsTitle": "Ibitekerezo",
     "noComments": "Nta gitekerezo kiratangwa. Ba uwa mbere!",
     "commentHint": "Andika igitekerezo…",
-    "deleteComment": "Siba igitekerezo"
+    "deleteComment": "Siba igitekerezo",
+    "postedTitle": "Yeee! Ifoto yawe yashyizweho",
+    "postedBody": "Urakoze gusangiza igikorwa cyawe cyo kurengera ibidukikije. Iyo abandi bayihaye inyenyeri, ubona amanota."
   },
   "history": {
     "title": "Urugendo rwanjye",
@@ -471,8 +474,8 @@
     "scanLimit": "Wageze ku mubare ntarengwa w'isuzuma uyu munsi. Garuka ejo!",
     "postLimit": "Ushobora gusangiza amafoto agera ku 10 ku munsi.",
     "storyGone": "Iyi nkuru ntikiboneka.",
-    "suspended": "Konti yahagaritswe",
-    "suspendedBody": "Umuyobozi wa EcoFun yahagaritse iyi konti. Vugana n'itsinda rya EcoFun niba utekereza ko ari ikosa.",
+    "suspended": "Wahagaritswe burundu",
+    "suspendedBody": "Konti yawe ya EcoFun yahagaritswe burundu kubera gushyiraho ibintu bidafite aho bihuriye n'ibidukikije, bidakwiye cyangwa binyuranyije n'amabwiriza. Ntushobora kongera gukoresha porogaramu. Niba utekereza ko ari ikosa, vugana n'itsinda rya EcoFun.",
     "quizPreparing": "Ibibazo bishya biri gutegurwa. Ongera ugerageze mu munota umwe.",
     "quizGone": "Ibi bibazo ntibikiboneka. Tangira ibindi.",
     "chooseAnswer": "Hitamo kimwe mu bisubizo bine.",
@@ -510,7 +513,12 @@
     "newUser": "{} yinjiye muri EcoFun",
     "userLeft": "{} yasibye konti ye",
     "newPost": "{} yasangije ifoto nshya",
-    "generic": "Igikorwa gishya"
+    "generic": "Igikorwa gishya",
+    "postReported": "{} yatanze ikirego ku ifoto",
+    "reportActioned": "Murakoze ku kirego cyanyu",
+    "reportActionedBody": "Twakuyeho ifoto mwatanzeho ikirego.",
+    "reportDismissed": "Ikirego cyasuzumwe",
+    "reportDismissedBody": "Twasuzumye ifoto mwatanzeho ikirego, dusanga ishobora kuguma."
   },
   "points": {
     "quiz": "Ibibazo",
@@ -540,5 +548,44 @@
     "scanBody": "Erekeza kamera ku myanda iyo ari yo yose. EcoFun ikubwira uko wayijugunya — kandi ubona amanota iyo ubikoze neza.",
     "communityTitle": "Dufatanye",
     "communityBody": "Kora igikorwa gito cyo kurengera ikirere buri munsi, sangiza amafoto, ushime ibyabandi kandi uzamuke ku rutonde."
+  },
+  "report": {
+    "action": "Tanga ikirego",
+    "title": "Tanga ikirego kuri iyi foto",
+    "subtitle": "Tubwire ikibazo. Itsinda ryacu risuzuma buri kirego.",
+    "reason_irrelevant": "Ntibijyanye n'ibidukikije",
+    "reason_offensive": "Bitukana cyangwa bibiba urwango",
+    "reason_spam": "Kwamamaza cyangwa ibitari ngombwa",
+    "reason_violence": "Urugomo cyangwa ibikorwa biteje akaga",
+    "reason_other": "Ikindi",
+    "detailsHint": "Ongeraho ibisobanuro (si ngombwa)",
+    "send": "Ohereza ikirego",
+    "thanks": "Murakoze — itsinda ryacu rirasuzuma iyi foto.",
+    "already": "Wamaze gutanga ikirego kuri iyi foto."
+  },
+  "reports": {
+    "title": "Ibirego",
+    "emptyTitle": "Nta kirego cyo gusuzuma",
+    "emptyBody": "Iyo abanyamuryango batanze ikirego ku ifoto, kigaragara hano.",
+    "count": {
+      "one": "ikirego {}",
+      "other": "ibirego {}"
+    },
+    "banner": {
+      "one": "Ifoto {} yatanzweho ikirego irategereje isuzuma",
+      "other": "Amafoto {} yatanzweho ibirego arategereje isuzuma"
+    },
+    "hiddenNote": "Ntigaragara ku rubuga mu gihe uyisuzuma.",
+    "banAction": "Kuraho ifoto uhagarike nyirayo",
+    "remove": "Kuraho ifoto",
+    "keep": "Gumana ifoto",
+    "ban": "Hagarika",
+    "banTitle": "Guhagarika {} burundu?",
+    "banMessage": "Ifoto irasibwa kandi uyu munyamuryango ntazongera gukoresha EcoFun. Nagerageza kwinjira, azabwirwa ko yahagaritswe kubera gushyiraho ibinyuranyije n'amabwiriza.",
+    "removeTitle": "Gukuraho iyi foto?",
+    "removeMessage": "{} azamenyeshwa ko umuyobozi yayikuyeho.",
+    "banned": "Ifoto yakuweho kandi nyirayo yahagaritswe",
+    "removed": "Ifoto yakuweho",
+    "dismissed": "Ifoto yagumishijwe — ibirego byafunzwe"
   }
 }

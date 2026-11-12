@@ -10,6 +10,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text.dart';
 import '../../core/utils/format.dart';
 import '../../core/widgets/buttons.dart';
+import '../../core/widgets/fields.dart';
 import '../../core/widgets/large_title_page.dart';
 import '../../core/widgets/photos.dart';
 import '../../core/widgets/pressable.dart';
@@ -320,11 +321,10 @@ class PostCard extends StatelessWidget {
                     Text(Fmt.ago(post.createdAt), style: AppText.caption.c(c.secondaryLabel)),
                   ]),
                 ),
-                if (mine)
-                  IconButton(
-                    icon: Icon(CupertinoIcons.ellipsis, color: c.secondaryLabel),
-                    onPressed: () => _ownerMenu(context),
-                  ),
+                IconButton(
+                  icon: Icon(CupertinoIcons.ellipsis, color: c.secondaryLabel),
+                  onPressed: () => mine ? _ownerMenu(context) : _viewerMenu(context),
+                ),
               ]),
             ),
           ),
@@ -366,6 +366,25 @@ class PostCard extends StatelessWidget {
             ]),
           ),
         ],
+      ),
+    );
+  }
+
+  void _viewerMenu(BuildContext context) {
+    showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        actions: [
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              Navigator.pop(ctx);
+              showReportSheet(context, post);
+            },
+            child: Text('report.action'.tr()),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(onPressed: () => Navigator.pop(ctx), child: Text('common.cancel'.tr())),
       ),
     );
   }
@@ -507,4 +526,74 @@ class SharePrompt extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       AppButton(label: 'community.share'.tr(), icon: CupertinoIcons.camera_fill, onPressed: onTap);
+}
+
+/// Report someone else's post. Admins are notified right away.
+Future<void> showReportSheet(BuildContext context, CommunityPost post) async {
+  const reasons = ['irrelevant', 'offensive', 'spam', 'violence', 'other'];
+  final details = TextEditingController();
+  String? reason;
+  final c = context.colors;
+  final send = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setSheet) => Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.viewInsetsOf(ctx).bottom + 16),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('report.title'.tr(), textAlign: TextAlign.center, style: AppText.headline.c(c.label)),
+          const SizedBox(height: 4),
+          Text('report.subtitle'.tr(), textAlign: TextAlign.center, style: AppText.footnote.c(c.secondaryLabel)),
+          const SizedBox(height: 14),
+          Container(
+            decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(16)),
+            child: Column(children: [
+              for (final r in reasons)
+                InkWell(
+                  onTap: () => setSheet(() => reason = r),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                    child: Row(children: [
+                      Expanded(child: Text('report.reason_$r'.tr(), style: AppText.body.c(c.label))),
+                      Icon(reason == r ? CupertinoIcons.largecircle_fill_circle : CupertinoIcons.circle,
+                          color: reason == r ? c.danger : c.tertiaryLabel, size: 22),
+                    ]),
+                  ),
+                ),
+            ]),
+          ),
+          const SizedBox(height: 10),
+          AppTextField(
+            controller: details,
+            placeholder: 'report.detailsHint'.tr(),
+            maxLength: 300,
+            maxLines: 3,
+            minLines: 1,
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          const SizedBox(height: 12),
+          AppButton(
+            label: 'report.send'.tr(),
+            icon: CupertinoIcons.flag_fill,
+            kind: ButtonStyleKind.danger,
+            onPressed: reason == null ? null : () => Navigator.pop(ctx, true),
+          ),
+          const SizedBox(height: 4),
+          AppButton(label: 'common.cancel'.tr(), kind: ButtonStyleKind.plain, onPressed: () => Navigator.pop(ctx, false)),
+        ]),
+      ),
+    ),
+  );
+  final text = details.text.trim();
+  details.dispose();
+  if (send != true || reason == null) return;
+  try {
+    final fresh = await CommunityRepository.report(post.id, reason!, text);
+    HapticFeedback.mediumImpact();
+    showToast(fresh ? 'report.thanks'.tr() : 'report.already'.tr(), icon: CupertinoIcons.flag_fill);
+    // reported posts disappear from the reporter's feed
+    if (Get.isRegistered<CommunityController>()) CommunityController.to.posts.removeWhere((p) => p.id == post.id);
+  } catch (e) {
+    showToast(friendlyError(e), error: true);
+  }
 }

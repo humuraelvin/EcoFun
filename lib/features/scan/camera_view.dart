@@ -117,7 +117,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
     });
     try {
       final file = await ctrl.takePicture();
-      Get.back(result: file.path);
+      if (mounted) Navigator.of(context).pop(file.path);
     } catch (_) {
       if (mounted) setState(() => _capturing = false);
     }
@@ -125,7 +125,7 @@ class _CameraViewState extends State<CameraView> with WidgetsBindingObserver {
 
   Future<void> _pickFromGallery() async {
     final file = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, maxHeight: 1600, imageQuality: 88);
-    if (file != null) Get.back(result: file.path);
+    if (file != null && mounted) Navigator.of(context).pop(file.path);
   }
 
   Future<void> _toggleFlash() async {

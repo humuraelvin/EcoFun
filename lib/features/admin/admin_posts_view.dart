@@ -78,6 +78,15 @@ class _AdminPostsViewState extends State<AdminPostsView> {
       title: 'admin.posts'.tr(),
       controller: _scroll,
       onRefresh: ctrl.refreshPosts,
+      trailing: TextButton.icon(
+        onPressed: () => Get.toNamed(Routes.adminReports),
+        icon: Icon(CupertinoIcons.flag_fill, size: 17, color: context.colors.danger),
+        label: Obx(() {
+          final n = ctrl.dashboard.value?['open_reports'] ?? 0;
+          return Text(n > 0 ? '${'reports.title'.tr()} ($n)' : 'reports.title'.tr(),
+              style: AppText.subhead.semibold.c(context.colors.danger));
+        }),
+      ),
       slivers: [
         Obx(() {
           final list = ctrl.posts.toList();

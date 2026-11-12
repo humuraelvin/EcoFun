@@ -807,3 +807,32 @@ class AdminDashboard {
         recent: ((j['recent'] as List?) ?? const []).map((e) => AdminUser.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
       );
 }
+
+class PostReport {
+  const PostReport({required this.reason, required this.details, required this.reporterName, required this.createdAt});
+  final String reason;
+  final String details;
+  final String reporterName;
+  final DateTime createdAt;
+
+  factory PostReport.fromJson(Map<String, dynamic> j) => PostReport(
+        reason: (j['reason'] as String?) ?? 'other',
+        details: (j['details'] as String?) ?? '',
+        reporterName: memberName(j['reporter_name'] as String?),
+        createdAt: _date(j['created_at']),
+      );
+}
+
+/// A post with open reports, for the admin review queue.
+class ReportedPost {
+  const ReportedPost({required this.post, required this.reports, required this.hidden});
+  final CommunityPost post;
+  final List<PostReport> reports;
+  final bool hidden;
+
+  factory ReportedPost.fromJson(Map<String, dynamic> j) => ReportedPost(
+        post: CommunityPost.fromJson(j),
+        reports: ((j['reports'] as List?) ?? const []).map((e) => PostReport.fromJson(Map<String, dynamic>.from(e as Map))).toList(),
+        hidden: j['hidden'] == true,
+      );
+}

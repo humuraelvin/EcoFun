@@ -182,6 +182,16 @@ class NotificationText {
       case 'user_left':
         return NotificationText('notif.userLeft'.tr(args: [s('name').isEmpty ? actor : s('name')]), s('email'),
             CupertinoIcons.person_badge_minus_fill, const Color(0xFFFF9500));
+      case 'post_reported':
+        return NotificationText('notif.postReported'.tr(args: [actor]),
+            '${'report.reason_${s('reason')}'.tr()}${s('details').isEmpty ? '' : ' · ${s('details')}'}',
+            CupertinoIcons.flag_fill, const Color(0xFFFF3B30));
+      case 'report_actioned':
+        return NotificationText('notif.reportActioned'.tr(), 'notif.reportActionedBody'.tr(), CupertinoIcons.checkmark_shield_fill,
+            const Color(0xFF0C9F5C));
+      case 'report_dismissed':
+        return NotificationText('notif.reportDismissed'.tr(), 'notif.reportDismissedBody'.tr(), CupertinoIcons.info_circle_fill,
+            const Color(0xFF8E8E93));
       case 'new_post':
         return NotificationText('notif.newPost'.tr(args: [actor]), s('caption'), CupertinoIcons.photo_fill,
             const Color(0xFF0A84FF));

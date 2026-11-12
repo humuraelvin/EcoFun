@@ -18,7 +18,8 @@
     "pts": "pts",
     "points": "points",
     "next": "Next",
-    "member": "EcoFun member"
+    "member": "EcoFun member",
+    "ok": "OK"
   },
   "time": {
     "now": "Just now",
@@ -296,7 +297,9 @@
     "commentsTitle": "Comments",
     "noComments": "No comments yet. Be the first!",
     "commentHint": "Add a comment…",
-    "deleteComment": "Delete comment"
+    "deleteComment": "Delete comment",
+    "postedTitle": "Hooray! Your photo is live",
+    "postedBody": "Thank you for sharing your eco action. When others rate it, you earn points."
   },
   "history": {
     "title": "My journey",
@@ -471,8 +474,8 @@
     "scanLimit": "You reached today's scan limit. Come back tomorrow!",
     "postLimit": "You can share up to 10 photos a day.",
     "storyGone": "This story is no longer available.",
-    "suspended": "Account suspended",
-    "suspendedBody": "An EcoFun admin suspended this account. Contact the EcoFun team if you think this is a mistake.",
+    "suspended": "You have been banned",
+    "suspendedBody": "Your EcoFun account has been banned for posting irrelevant, unrelated or policy-violating content. You can no longer use the app. If you think this is a mistake, contact the EcoFun team.",
     "quizPreparing": "New quiz questions are being prepared. Try again in a minute.",
     "quizGone": "This quiz is no longer available. Start a new one.",
     "chooseAnswer": "Choose one of the four answers.",
@@ -510,7 +513,12 @@
     "newUser": "{} joined EcoFun",
     "userLeft": "{} deleted their account",
     "newPost": "{} shared a new photo",
-    "generic": "New activity"
+    "generic": "New activity",
+    "postReported": "{} reported a post",
+    "reportActioned": "Thanks for your report",
+    "reportActionedBody": "We removed the post you reported.",
+    "reportDismissed": "Report reviewed",
+    "reportDismissedBody": "We checked the post you reported and kept it up."
   },
   "points": {
     "quiz": "Quiz",
@@ -540,5 +548,44 @@
     "scanBody": "Point your camera at any waste. EcoFun tells you how to dispose of it — and you earn points when you do it right.",
     "communityTitle": "Act together",
     "communityBody": "Do a small climate mission each day, share photos, rate others and climb the leaderboard."
+  },
+  "report": {
+    "action": "Report post",
+    "title": "Report this post",
+    "subtitle": "Tell us what's wrong. Our team reviews every report.",
+    "reason_irrelevant": "Not about the environment",
+    "reason_offensive": "Offensive or hateful",
+    "reason_spam": "Spam or advertising",
+    "reason_violence": "Violence or dangerous acts",
+    "reason_other": "Something else",
+    "detailsHint": "Add details (optional)",
+    "send": "Send report",
+    "thanks": "Thanks — our team will review this post.",
+    "already": "You already reported this post."
+  },
+  "reports": {
+    "title": "Reports",
+    "emptyTitle": "No reports to review",
+    "emptyBody": "When members report a post, it appears here.",
+    "count": {
+      "one": "{} report",
+      "other": "{} reports"
+    },
+    "banner": {
+      "one": "{} reported post needs review",
+      "other": "{} reported posts need review"
+    },
+    "hiddenNote": "Hidden from the feed while you review it.",
+    "banAction": "Remove post and ban author",
+    "remove": "Remove post",
+    "keep": "Keep post",
+    "ban": "Ban",
+    "banTitle": "Ban {}?",
+    "banMessage": "The post is deleted and this member can never use EcoFun again. When they try to sign in, they are told they were banned for posting policy-violating content.",
+    "removeTitle": "Remove this post?",
+    "removeMessage": "{} will be told an admin removed it.",
+    "banned": "Post removed and member banned",
+    "removed": "Post removed",
+    "dismissed": "Post kept — reports closed"
   }
 }

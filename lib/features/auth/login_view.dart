@@ -65,8 +65,12 @@ class _LoginViewState extends State<LoginView> {
     try {
       await action();
     } catch (e) {
-      if (mounted) setState(() => _error = friendlyError(e));
       HapticFeedback.heavyImpact();
+      if (isSuspendedError(e)) {
+        if (mounted) await showBannedDialog(context);
+      } else if (mounted) {
+        setState(() => _error = friendlyError(e));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -350,3 +354,20 @@ class _LoginViewState extends State<LoginView> {
         ],
       );
 }
+
+/// Shown when a banned account tries to use EcoFun.
+Future<void> showBannedDialog(BuildContext context) => showCupertinoDialog<void>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Column(children: [
+            const Icon(CupertinoIcons.nosign, size: 40, color: Color(0xFFFF3B30)),
+            const SizedBox(height: 8),
+            Text('errors.suspended'.tr()),
+          ]),
+        ),
+        content: Text('errors.suspendedBody'.tr()),
+        actions: [CupertinoDialogAction(onPressed: () => Navigator.pop(ctx), child: Text('common.ok'.tr()))],
+      ),
+    );

@@ -102,7 +102,7 @@ class _MissionViewState extends State<MissionView> {
         showDragHandle: false,
         builder: (_) => _Celebration(points: done.points, streak: done.streak),
       );
-      Get.back();
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
       showToast(friendlyError(e), error: true);
     } finally {

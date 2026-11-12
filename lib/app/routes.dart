@@ -2,6 +2,7 @@ import 'package:get/get.dart' hide Trans;
 
 import '../features/auth/login_view.dart';
 import '../features/auth/reset_password_view.dart';
+import '../features/admin/admin_reports_view.dart';
 import '../features/admin/admin_shell.dart';
 import '../features/admin/admin_user_view.dart';
 import '../features/community/compose_view.dart';
@@ -36,6 +37,7 @@ abstract final class Routes {
   static const member = '/member';
   static const admin = '/admin';
   static const adminUser = '/admin/user';
+  static const adminReports = '/admin/reports';
   static const post = '/post';
   static const notifications = '/notifications';
 
@@ -56,6 +58,7 @@ abstract final class Routes {
     GetPage(name: member, page: () => const MemberView()),
     GetPage(name: admin, page: () => const AdminShell(), transition: Transition.fadeIn),
     GetPage(name: adminUser, page: () => const AdminUserView()),
+    GetPage(name: adminReports, page: () => const AdminReportsView()),
     GetPage(name: post, page: () => const PostView()),
     GetPage(name: notifications, page: () => const NotificationsView()),
   ];

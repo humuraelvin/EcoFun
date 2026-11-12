@@ -233,6 +233,12 @@ abstract final class CommunityRepository {
     await rpc<dynamic>('add_comment', {'p_post_id': postId, 'p_body': body});
   }
 
+  /// Returns false when this member had already reported the post.
+  static Future<bool> report(String postId, String reason, String details) async {
+    final j = _map(await rpc<dynamic>('report_post', {'p_post_id': postId, 'p_reason': reason, 'p_details': details}));
+    return j['already_reported'] != true;
+  }
+
   static Future<void> deleteComment(String commentId) async {
     await rpc<dynamic>('delete_comment', {'p_comment_id': commentId});
   }
@@ -301,6 +307,21 @@ abstract final class AdminRepository {
     try {
       await supa.storage.from(Bucket.community.name).remove([post.imagePath]);
     } catch (_) {}
+  }
+
+  static Future<List<ReportedPost>> reports() async {
+    final json = await rpc<dynamic>('admin_reports', {'p_status': 'open'});
+    return (json as List).map((e) => ReportedPost.fromJson(_map(e))).toList();
+  }
+
+  /// [action]: 'dismiss' (the post is fine), 'remove' (delete it) or 'ban' (delete it and ban the author).
+  static Future<void> resolveReports(ReportedPost r, String action, {String note = ''}) async {
+    await rpc<dynamic>('admin_resolve_reports', {'p_post_id': r.post.id, 'p_action': action, 'p_note': note});
+    if (action != 'dismiss') {
+      try {
+        await supa.storage.from(Bucket.community.name).remove([r.post.imagePath]);
+      } catch (_) {}
+    }
   }
 
   static Future<String> translate(String text, String from, String to) async =>

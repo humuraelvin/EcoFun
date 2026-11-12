@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:easy_localization/easy_localization.dart';
 import 'package:get/get.dart' hide Trans;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -8,8 +7,8 @@ import '../data/auth_repository.dart';
 import '../data/models.dart';
 import '../data/repositories.dart';
 import '../data/storage_service.dart';
-import '../core/widgets/toast.dart';
 import '../data/supa.dart';
+import '../features/auth/login_view.dart' show showBannedDialog;
 import 'app_prefs.dart';
 import 'news_controller.dart';
 import 'notification_controller.dart';
@@ -99,8 +98,9 @@ class SessionController extends GetxController {
     _signingOutSuspended = true;
     try {
       await AuthRepository.signOut();
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-      showToast('errors.suspendedBody'.tr(), title: 'errors.suspended'.tr(), error: true);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      final ctx = Get.context;
+      if (ctx != null && ctx.mounted) await showBannedDialog(ctx);
     } finally {
       _signingOutSuspended = false;
     }

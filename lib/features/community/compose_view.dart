@@ -11,6 +11,7 @@ import '../../core/theme/app_text.dart';
 import '../../core/utils/image_utils.dart';
 import '../../core/utils/photo_picker.dart';
 import '../../core/widgets/buttons.dart';
+import '../../core/widgets/emoji_burst.dart';
 import '../../core/widgets/fields.dart';
 import '../../core/widgets/pressable.dart';
 import '../../core/widgets/toast.dart';
@@ -40,21 +41,69 @@ class _ComposeViewState extends State<ComposeView> {
     if (p != null) setState(() => _path = p);
   }
 
+  bool _posted = false;
+
   Future<void> _post() async {
-    if (_path == null || _posting) return;
+    if (_path == null || _posting || _posted) return;
     FocusScope.of(context).unfocus();
     setState(() => _posting = true);
     try {
       final bytes = await ImageUtils.compressForUpload(_path!, side: 1080, quality: 78);
       await CommunityRepository.create(bytes, _caption.text.trim());
+      _posted = true; // never post twice from this screen
       HapticFeedback.heavyImpact();
-      showToast('community.posted'.tr());
-      Get.back(result: true);
+      if (!mounted) return;
+      await _celebrate();
+      // Close this screen itself (Get.back() would only close an open toast).
+      if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       showToast(friendlyError(e), error: true);
     } finally {
-      if (mounted) setState(() => _posting = false);
+      if (mounted && !_posted) setState(() => _posting = false);
     }
+  }
+
+  /// Hooray! A shower of eco emojis and a big thank-you, then back to the feed.
+  Future<void> _celebrate() {
+    final c = context.colors;
+    final dialog = showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'community.postedTitle'.tr(),
+      barrierColor: Colors.black.withValues(alpha: 0.35),
+      transitionDuration: const Duration(milliseconds: 260),
+      pageBuilder: (ctx, _, _) => Stack(children: [
+        const Positioned.fill(child: EmojiBurst()),
+        Center(
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 36),
+              padding: const EdgeInsets.fromLTRB(24, 26, 24, 22),
+              decoration: BoxDecoration(color: c.surfaceRaised, borderRadius: BorderRadius.circular(28)),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Text('🎉', style: TextStyle(fontSize: 56)),
+                const SizedBox(height: 10),
+                Text('community.postedTitle'.tr(), textAlign: TextAlign.center, style: AppText.title2.c(c.label)),
+                const SizedBox(height: 6),
+                Text('community.postedBody'.tr(), textAlign: TextAlign.center, style: AppText.callout.c(c.secondaryLabel)),
+              ]),
+            ),
+          ),
+        ),
+      ]),
+      transitionBuilder: (ctx, a, _, child) => FadeTransition(
+        opacity: a,
+        child: ScaleTransition(scale: Tween(begin: 0.92, end: 1.0).animate(CurvedAnimation(parent: a, curve: Curves.easeOutBack)), child: child),
+      ),
+    );
+    // close the celebration by itself after the emojis have fallen (unless already tapped away)
+    var open = true;
+    final nav = Navigator.of(context, rootNavigator: true);
+    Future<void>.delayed(const Duration(milliseconds: 2700), () {
+      if (open) nav.pop();
+    });
+    return dialog.whenComplete(() => open = false);
   }
 
   @override
@@ -111,7 +160,7 @@ class _ComposeViewState extends State<ComposeView> {
             label: 'community.share'.tr(),
             icon: CupertinoIcons.paperplane_fill,
             loading: _posting,
-            onPressed: _path == null ? null : _post,
+            onPressed: _path == null || _posted ? null : _post,
           ),
           const SizedBox(height: 10),
           Text('community.pointsInfo'.tr(), textAlign: TextAlign.center, style: AppText.caption.c(c.tertiaryLabel)),
