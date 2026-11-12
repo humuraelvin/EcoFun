@@ -1,0 +1,29 @@
+# Publishes the Android APK as a GitHub Release whenever scripts/release-android.sh pushes the
+# `apk-release` branch. Uses GitHub's built-in token, so no personal token is needed.
+name: Publish Android APK
+on:
+  push:
+    branches: [apk-release]
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          NAME=$(jq -r .version_name release.json)
+          TAG="v$NAME"
+          jq -r .notes release.json > notes.md
+          if gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" EcoFun.apk --clobber -R "$REPO"
+            gh release edit "$TAG" --notes-file notes.md --latest -R "$REPO"
+          else
+            gh release create "$TAG" EcoFun.apk -R "$REPO" --target "$GITHUB_SHA" \
+              --title "EcoFun $NAME" --notes-file notes.md --latest
+          fi
+          echo "Published https://github.com/$REPO/releases/latest/download/EcoFun.apk"
