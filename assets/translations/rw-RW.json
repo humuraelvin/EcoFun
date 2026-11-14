@@ -89,7 +89,13 @@
     "sendCode": "Ohereza kode",
     "resetPassword": "Shyiraho ijambo ry'ibanga rishya",
     "resendCode": "Ohereza kode nshya",
-    "passwordUpdated": "Ijambo ry'ibanga ryahinduwe. Murakaza neza!"
+    "passwordUpdated": "Ijambo ry'ibanga ryahinduwe. Murakaza neza!",
+    "termsLead": "Ukomeje, uba wemeye ",
+    "and": " na ",
+    "termsTail": ". Imeyili yawe ntigaragazwa abandi banyamuryango.",
+    "agreeLead": "Nasomye kandi nemera ",
+    "agreeTail": ".",
+    "mustAgree": "Emera Amabwiriza y'Imikoreshereze na Politiki y'Ibanga kugira ngo ufungure konti."
   },
   "home": {
     "goodMorning": "Mwaramutse",
@@ -332,7 +338,8 @@
     "about": "EcoFun · Ibikorwa birengera ikirere mu Rwanda. Amakuru ava kuri Taarifa, Green Africa, KT Press, Rebero, Umuseke na Izuba.",
     "emailUpdates": "Amakuru kuri imeyili",
     "emailUpdatesOn": "Uzajya ubona imeyili igihe ugeze ku minsi myinshi ikurikiranye.",
-    "emailUpdatesOff": "Imeyili z'iminsi ikurikiranye zahagaritswe. Iz'umutekano zo zizakomeza kuza."
+    "emailUpdatesOff": "Imeyili z'iminsi ikurikiranye zahagaritswe. Iz'umutekano zo zizakomeza kuza.",
+    "darkMode": "Ibara ryijimye"
   },
   "admin": {
     "portal": "Ubuyobozi",
@@ -518,7 +525,10 @@
     "reportActioned": "Murakoze ku kirego cyanyu",
     "reportActionedBody": "Twakuyeho ifoto mwatanzeho ikirego.",
     "reportDismissed": "Ikirego cyasuzumwe",
-    "reportDismissedBody": "Twasuzumye ifoto mwatanzeho ikirego, dusanga ishobora kuguma."
+    "reportDismissedBody": "Twasuzumye ifoto mwatanzeho ikirego, dusanga ishobora kuguma.",
+    "supportNew": "{} yohereje ubutumwa bw'ubufasha",
+    "supportReply": "Ubufasha bwasubije ubutumwa bwawe",
+    "supportFixed": "Ikibazo watumenyesheje cyakemutse"
   },
   "points": {
     "quiz": "Ibibazo",
@@ -587,5 +597,66 @@
     "banned": "Ifoto yakuweho kandi nyirayo yahagaritswe",
     "removed": "Ifoto yakuweho",
     "dismissed": "Ifoto yagumishijwe — ibirego byafunzwe"
+  },
+  "legal": {
+    "title": "Ibanga n'Amabwiriza",
+    "privacy": "Politiki y'Ibanga",
+    "terms": "Amabwiriza y'Imikoreshereze",
+    "updated": "Byavuguruwe: {}"
+  },
+  "support": {
+    "title": "Vugana n'ubufasha",
+    "intro": "Hari ikitagenda neza, cyangwa ufite ikibazo kuri konti cyangwa amanota yawe? Tubwire hano. Umuyobozi azagusubiza kuri iyi paji kandi uzabona ubutumwa bukumenyesha.",
+    "whatAbout": "BIRAJYANYE NA NIKI?",
+    "cat_bug": "Ikibazo cya porogaramu",
+    "cat_account": "Konti",
+    "cat_points": "Amanota",
+    "cat_idea": "Igitekerezo",
+    "cat_other": "Ibindi",
+    "placeholder": "Sobanura ibyabaye, kuri paji iyihe, n'ibyo wari witeze…",
+    "send": "Ohereza ubutumwa",
+    "sent": "Ubutumwa bwoherejwe. Turagusubiza hano vuba.",
+    "tooShort": "Sobanura ikibazo mu magambo make yiyongereye.",
+    "tooMany": "Usanzwe ufite ubutumwa 5 butarasubizwa. Tegereza igisubizo.",
+    "gone": "Ubu butumwa ntibukiboneka.",
+    "writeReply": "Banza wandike igisubizo.",
+    "myMessages": "Ubutumwa bwanjye",
+    "none": "Ntiwari wavugana n'ubufasha.",
+    "waiting": "Dutegereje igisubizo cy'itsinda rya EcoFun.",
+    "teamReply": "Itsinda rya EcoFun",
+    "fixedDefault": "Murakoze kutumenyesha! Iki kibazo cyakemuwe kuri bose.",
+    "statusOpen": "Bitegereje",
+    "statusReplied": "Byasubijwe",
+    "statusFixed": "Byakemutse",
+    "adminTitle": "Ubutumwa bw'ubufasha",
+    "tabOpen": "Bitegereje",
+    "tabDone": "Byasubijwe",
+    "adminEmpty": "Nta butumwa butegereje",
+    "adminEmptyDone": "Nta butumwa bwasubijwe buraboneka",
+    "reply": "Subiza",
+    "editReply": "Hindura igisubizo",
+    "fixedForAll": "Byakemukiye bose",
+    "replyTo": "Subiza {}",
+    "replyHint": "Uyu munyamuryango wenyine ni we ubona igisubizo cyawe, kuri paji ye ya Vugana n'ubufasha.",
+    "fixedTitle": "Byakemukiye bose",
+    "fixedHint": "Koresha ibi iyo ikibazo cyagiraga ingaruka kuri porogaramu yose. Umunyamuryango amenyeshwa ko cyakemutse, kandi ushobora kubimenyesha bose nyuma.",
+    "replyPlaceholder": "Andika igisubizo cyawe…",
+    "sendReply": "Ohereza igisubizo",
+    "markFixed": "Emeza ko byakemutse",
+    "replySent": "Igisubizo cyoherejwe",
+    "markedFixed": "Byemejwe ko byakemutse",
+    "fixedDefaultAdmin": "Murakoze kutumenyesha! Iki kibazo cyakemuwe kuri bose. Niba ukikibona, vugurura cyangwa wongere ufungure EcoFun.",
+    "announceTitle": "Kubimenyesha bose?",
+    "announceBody": "Tangaza itangazo kugira ngo buri munyamuryango amenye ko iki kibazo cyakemutse. Turagutegurira umushinga waryo.",
+    "notNow": "Ubu oya",
+    "announce": "Andika itangazo",
+    "draftTitleEn": "Fixed: a problem you may have noticed",
+    "draftBodyEn": "Thanks to members who reported it, we fixed this problem: \"{}\". Everything should work normally now. If you still see it, restart EcoFun or contact support from your profile.",
+    "draftTitleRw": "Twakemuye ikibazo mushobora kuba mwarabonye",
+    "draftBodyRw": "Turashimira abanyamuryango batumenyesheje ikibazo, ubu cyakemutse. Ibintu byose bigomba gukora neza. Niba ukibona ikibazo, ongera ufungure EcoFun cyangwa uvugane n'ubufasha uhereye kuri porofayili yawe.",
+    "banner": {
+      "one": "Ubutumwa {} bw'ubufasha burategereje",
+      "other": "Ubutumwa {} bw'ubufasha burategereje"
+    }
   }
 }

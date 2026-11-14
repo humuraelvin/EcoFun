@@ -17,6 +17,7 @@ import '../../core/widgets/large_title_page.dart';
 import '../../core/widgets/photos.dart';
 import '../../core/widgets/pressable.dart';
 import '../../core/widgets/states.dart';
+import '../../core/widgets/theme_toggle.dart';
 import '../../core/widgets/toast.dart';
 import '../../data/auth_repository.dart';
 import '../../data/models.dart';
@@ -260,6 +261,7 @@ class _ProfileViewState extends State<ProfileView> {
                   value: context.locale.languageCode == 'rw' ? 'Ikinyarwanda' : 'English',
                   onTap: _language,
                 ),
+                const DarkModeRow(),
                 GroupedRow(
                   icon: CupertinoIcons.envelope_fill,
                   iconColor: const Color(0xFFFF375F),
@@ -280,6 +282,21 @@ class _ProfileViewState extends State<ProfileView> {
                         onTap: () => Get.offAllNamed(Routes.admin),
                       )
                     : const SizedBox.shrink()),
+              ]),
+              const SizedBox(height: 18),
+              GroupedSection(children: [
+                GroupedRow(
+                  icon: CupertinoIcons.chat_bubble_2_fill,
+                  iconColor: const Color(0xFF0A84FF),
+                  title: 'support.title'.tr(),
+                  onTap: () => Get.toNamed(Routes.support),
+                ),
+                GroupedRow(
+                  icon: CupertinoIcons.lock_shield_fill,
+                  iconColor: const Color(0xFF34C759),
+                  title: 'legal.title'.tr(),
+                  onTap: () => Get.toNamed(Routes.legal),
+                ),
               ]),
               const SizedBox(height: 18),
               GroupedSection(

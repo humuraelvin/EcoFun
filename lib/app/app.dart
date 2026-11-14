@@ -40,7 +40,7 @@ class EcoFunApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
-      themeMode: ThemeMode.system,
+      themeMode: AppPrefs.themeMode,
       locale: context.locale,
       supportedLocales: context.supportedLocales,
       localizationsDelegates: [
@@ -67,7 +67,7 @@ class EcoFunApp extends StatelessWidget {
         Future<void>.delayed(const Duration(seconds: 2), UpdateChecker.check);
       },
       builder: (context, child) {
-        final brightness = MediaQuery.platformBrightnessOf(context);
+        final brightness = Theme.of(context).brightness;
         // Keep text readable but stop extreme font scales from breaking layouts.
         final mq = MediaQuery.of(context);
         return AnnotatedRegion<SystemUiOverlayStyle>(

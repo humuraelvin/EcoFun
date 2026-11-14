@@ -192,6 +192,15 @@ class NotificationText {
       case 'report_dismissed':
         return NotificationText('notif.reportDismissed'.tr(), 'notif.reportDismissedBody'.tr(), CupertinoIcons.info_circle_fill,
             const Color(0xFF8E8E93));
+      case 'support_new':
+        return NotificationText('notif.supportNew'.tr(args: [actor]), s('snippet'), CupertinoIcons.chat_bubble_2_fill,
+            const Color(0xFF0A84FF));
+      case 'support_reply':
+        return NotificationText('notif.supportReply'.tr(), s('snippet'), CupertinoIcons.arrowshape_turn_up_left_fill,
+            const Color(0xFF0A84FF));
+      case 'support_fixed':
+        return NotificationText('notif.supportFixed'.tr(), s('snippet'), CupertinoIcons.checkmark_seal_fill,
+            const Color(0xFF0C9F5C));
       case 'new_post':
         return NotificationText('notif.newPost'.tr(args: [actor]), s('caption'), CupertinoIcons.photo_fill,
             const Color(0xFF0A84FF));

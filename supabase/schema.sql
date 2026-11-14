@@ -230,8 +230,8 @@ create table if not exists public.announcements (
 );
 
 -- In-app notifications (live through Supabase Realtime).
---   members: rating, comment, announcement, points_granted, points_removed, post_removed, welcome
---   admins:  new_user, user_left, new_post
+--   members: rating, comment, announcement, points_granted, points_removed, post_removed, welcome, support_reply, support_fixed
+--   admins:  new_user, user_left, new_post, post_reported, support_new
 create table if not exists public.notifications (
   id          bigint generated always as identity primary key,
   user_id     uuid not null references public.profiles (id) on delete cascade,
@@ -267,6 +267,22 @@ create table if not exists public.post_reports (
 );
 create index if not exists post_reports_open_idx on public.post_reports (post_id) where status = 'open';
 alter table public.post_reports enable row level security;   -- reports are private: only via functions
+
+-- Contact support: a member describes a problem; an admin replies, or marks it fixed for everyone.
+create table if not exists public.support_tickets (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references public.profiles (id) on delete cascade,
+  category    text not null default 'other' check (category in ('bug', 'account', 'points', 'idea', 'other')),
+  message     text not null check (char_length(message) between 10 and 1000),
+  status      text not null default 'open' check (status in ('open', 'replied', 'fixed')),
+  reply       text check (char_length(reply) <= 1000),
+  replied_by  uuid references public.profiles (id) on delete set null,
+  replied_at  timestamptz,
+  created_at  timestamptz not null default now()
+);
+create index if not exists support_tickets_user_idx on public.support_tickets (user_id, created_at desc);
+create index if not exists support_tickets_open_idx on public.support_tickets (created_at) where status = 'open';
+alter table public.support_tickets enable row level security;   -- private: only via functions
 alter table public.waste_scans add column if not exists disposed_at timestamptz;
 alter table public.waste_scans add column if not exists disposal_image_path text;
 alter table public.waste_scans add column if not exists disposal_feedback text;
@@ -1665,10 +1681,10 @@ begin
   return jsonb_build_object(
     'leaders', coalesce((
       select jsonb_agg(jsonb_build_object('id', id, 'full_name', full_name, 'avatar_url', avatar_url, 'points', points, 'rank', rnk) order by rnk)
-      from (select id, full_name, avatar_url, points, rank() over (order by points desc) as rnk, created_at
+      from (select id, full_name, avatar_url, points, row_number() over (order by points desc, created_at, id) as rnk
             from public.profiles where not is_admin and suspended_at is null
-            order by points desc, created_at limit least(greatest(p_limit, 1), 200)) t), '[]'::jsonb),
-    'my_rank', (select rnk from (select id, rank() over (order by points desc) as rnk from public.profiles
+            order by points desc, created_at, id limit least(greatest(p_limit, 1), 200)) t), '[]'::jsonb),
+    'my_rank', (select rnk from (select id, row_number() over (order by points desc, created_at, id) as rnk from public.profiles
                                  where not is_admin and suspended_at is null) r where r.id = uid),
     'members', (select count(*) from public.profiles where not is_admin and suspended_at is null));
 end;
@@ -1823,6 +1839,76 @@ begin
 end;
 $$;
 
+-- Members: send a support message. Admins are told immediately.
+create or replace function public.submit_support(p_category text, p_message text)
+returns jsonb language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_user(); msg text := btrim(coalesce(p_message, '')); t public.support_tickets;
+begin
+  if char_length(msg) < 10 then raise exception 'Describe the problem in a few more words.' using errcode = 'P0001'; end if;
+  if (select count(*) from public.support_tickets where user_id = uid and status = 'open') >= 5 then
+    raise exception 'You already have 5 open messages. Please wait for a reply.' using errcode = 'P0001';
+  end if;
+  insert into public.support_tickets (user_id, category, message)
+  values (uid, case when p_category in ('bug', 'account', 'points', 'idea', 'other') then p_category else 'other' end, left(msg, 1000))
+  returning * into t;
+  perform public._notify_admins('support_new', uid, null,
+    jsonb_build_object('ticket_id', t.id, 'category', t.category, 'snippet', left(t.message, 120)));
+  return jsonb_build_object('id', t.id, 'category', t.category, 'message', t.message, 'status', t.status,
+                            'reply', t.reply, 'replied_at', t.replied_at, 'created_at', t.created_at);
+end;
+$$;
+
+-- Members: their own support messages and the replies.
+create or replace function public.my_support()
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := public._require_user();
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('id', id, 'category', category, 'message', message, 'status', status,
+                                        'reply', reply, 'replied_at', replied_at, 'created_at', created_at)
+                     order by created_at desc)
+    from (select * from public.support_tickets where user_id = uid order by created_at desc limit 50) t), '[]'::jsonb);
+end;
+$$;
+
+-- Admins: open messages (p_status = 'open') or answered ones (p_status = 'done').
+create or replace function public.admin_support(p_status text default 'open')
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare uid uuid := public._require_admin();
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('id', t.id, 'category', t.category, 'message', t.message, 'status', t.status,
+                                        'reply', t.reply, 'replied_at', t.replied_at, 'created_at', t.created_at,
+                                        'user_id', t.user_id, 'user_name', p.full_name, 'user_avatar', p.avatar_url,
+                                        'user_email', u.email)
+                     order by case when p_status = 'open' then extract(epoch from t.created_at)
+                                   else -extract(epoch from coalesce(t.replied_at, t.created_at)) end)
+    from public.support_tickets t
+    join public.profiles p on p.id = t.user_id
+    join auth.users u on u.id = t.user_id
+    where (p_status = 'open' and t.status = 'open') or (p_status <> 'open' and t.status <> 'open')), '[]'::jsonb);
+end;
+$$;
+
+-- Admins: answer a message (status 'replied'), or mark it fixed for everyone (status 'fixed').
+-- The member is notified and sees the answer on their Contact support page.
+create or replace function public.admin_answer_support(p_id uuid, p_reply text, p_fixed boolean default false)
+returns jsonb language plpgsql volatile security definer set search_path = '' as $$
+declare uid uuid := public._require_admin(); t public.support_tickets; msg text := btrim(coalesce(p_reply, ''));
+begin
+  if not p_fixed and char_length(msg) < 2 then raise exception 'Write a reply.' using errcode = 'P0001'; end if;
+  update public.support_tickets
+     set status = case when p_fixed then 'fixed' else 'replied' end,
+         reply = nullif(left(msg, 1000), ''), replied_by = uid, replied_at = now()
+   where id = p_id
+  returning * into t;
+  if t.id is null then raise exception 'This message is no longer available.' using errcode = 'P0001'; end if;
+  perform public._notify(t.user_id, case when p_fixed then 'support_fixed' else 'support_reply' end, null, null,
+    jsonb_build_object('ticket_id', t.id, 'snippet', left(coalesce(t.reply, t.message), 120)));
+  return jsonb_build_object('ok', true, 'status', t.status);
+end;
+$$;
+
 create or replace function public.admin_dashboard()
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare uid uuid := public._require_admin(); today date := public.eco_today();
@@ -1840,6 +1926,7 @@ begin
     'unverified', (select count(*) from auth.users where email_confirmed_at is null),
     'posts', (select count(*) from public.community_posts),
     'open_reports', (select count(distinct post_id) from public.post_reports where status = 'open'),
+    'open_support', (select count(*) from public.support_tickets where status = 'open'),
     'posts_today', (select count(*) from public.community_posts where created_at > now() - interval '1 day'),
     'comments', (select count(*) from public.post_comments),
     'ratings', (select count(*) from public.post_ratings),
@@ -2339,6 +2426,10 @@ grant execute on function public.get_leaderboard(integer) to authenticated;
 grant execute on function public.report_post(uuid, text, text) to authenticated;
 grant execute on function public.admin_reports(text) to authenticated;
 grant execute on function public.admin_resolve_reports(uuid, text, text) to authenticated;
+grant execute on function public.submit_support(text, text) to authenticated;
+grant execute on function public.my_support() to authenticated;
+grant execute on function public.admin_support(text) to authenticated;
+grant execute on function public.admin_answer_support(uuid, text, boolean) to authenticated;
 grant execute on function public.get_notifications(integer, timestamptz) to authenticated;
 grant execute on function public.mark_notifications_read(bigint[]) to authenticated;
 grant execute on function public.clear_notifications() to authenticated;
@@ -2362,7 +2453,9 @@ grant execute on function public.mailer_done(text, bigint, text) to anon, authen
 revoke execute on function public.get_home(), public.mark_news_read(text), public.get_quiz(text),
   public.answer_quiz(uuid, integer, integer), public.finish_quiz(uuid), public.classify_waste(text, text, text, text),
   public.complete_mission(text, text, uuid), public.create_post(text, text), public.get_feed(integer, timestamptz),
-  public.rate_post(uuid, integer), public.admin_grant_points(text, integer, text), public.delete_my_account()
+  public.rate_post(uuid, integer), public.admin_grant_points(text, integer, text), public.delete_my_account(),
+  public.submit_support(text, text), public.my_support(), public.admin_support(text),
+  public.admin_answer_support(uuid, text, boolean)
   from public, anon;
 
 -- ----------------------------------------------------------------------------

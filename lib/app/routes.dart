@@ -4,12 +4,14 @@ import '../features/auth/login_view.dart';
 import '../features/auth/reset_password_view.dart';
 import '../features/admin/admin_reports_view.dart';
 import '../features/admin/admin_shell.dart';
+import '../features/admin/admin_support_view.dart';
 import '../features/admin/admin_user_view.dart';
 import '../features/community/compose_view.dart';
 import '../features/community/member_view.dart';
 import '../features/community/post_view.dart';
 import '../features/history/history_detail_view.dart';
 import '../features/history/history_view.dart';
+import '../features/legal/legal_view.dart';
 import '../features/mission/mission_view.dart';
 import '../features/news/news_detail_view.dart';
 import '../features/notifications/notifications_view.dart';
@@ -19,6 +21,7 @@ import '../features/scan/camera_view.dart';
 import '../features/scan/scan_result_view.dart';
 import '../features/scan/scan_view.dart';
 import '../features/shell/shell_view.dart';
+import '../features/support/support_view.dart';
 
 abstract final class Routes {
   static const welcome = '/welcome';
@@ -40,6 +43,9 @@ abstract final class Routes {
   static const adminReports = '/admin/reports';
   static const post = '/post';
   static const notifications = '/notifications';
+  static const legal = '/legal';
+  static const support = '/support';
+  static const adminSupport = '/admin/support';
 
   static final pages = <GetPage<dynamic>>[
     GetPage(name: welcome, page: () => const OnboardingView(), transition: Transition.fadeIn),
@@ -61,5 +67,8 @@ abstract final class Routes {
     GetPage(name: adminReports, page: () => const AdminReportsView()),
     GetPage(name: post, page: () => const PostView()),
     GetPage(name: notifications, page: () => const NotificationsView()),
+    GetPage(name: legal, page: () => const LegalView()),
+    GetPage(name: support, page: () => const SupportView()),
+    GetPage(name: adminSupport, page: () => const AdminSupportView()),
   ];
 }

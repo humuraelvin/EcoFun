@@ -836,3 +836,50 @@ class ReportedPost {
         hidden: j['hidden'] == true,
       );
 }
+
+/// A message sent to EcoFun support, with the admin's answer once there is one.
+/// [status]: 'open' (waiting), 'replied' (an admin answered) or 'fixed' (fixed for everyone).
+class SupportTicket {
+  const SupportTicket({
+    required this.id,
+    required this.category,
+    required this.message,
+    required this.status,
+    required this.reply,
+    required this.repliedAt,
+    required this.createdAt,
+    this.userId,
+    this.userName,
+    this.userAvatar,
+    this.userEmail,
+  });
+
+  final String id;
+  final String category;
+  final String message;
+  final String status;
+  final String? reply;
+  final DateTime? repliedAt;
+  final DateTime createdAt;
+  // Admin view only.
+  final String? userId;
+  final String? userName;
+  final String? userAvatar;
+  final String? userEmail;
+
+  bool get isOpen => status == 'open';
+
+  factory SupportTicket.fromJson(Map<String, dynamic> j) => SupportTicket(
+        id: j['id'] as String,
+        category: (j['category'] as String?) ?? 'other',
+        message: (j['message'] as String?) ?? '',
+        status: (j['status'] as String?) ?? 'open',
+        reply: (j['reply'] as String?)?.trim().isEmpty ?? true ? null : (j['reply'] as String).trim(),
+        repliedAt: j['replied_at'] == null ? null : _date(j['replied_at']),
+        createdAt: _date(j['created_at']),
+        userId: j['user_id'] as String?,
+        userName: j['user_id'] == null ? null : memberName(j['user_name'] as String?),
+        userAvatar: j['user_avatar'] as String?,
+        userEmail: j['user_email'] as String?,
+      );
+}

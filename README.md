@@ -59,6 +59,7 @@ Works on Android 7.0 and newer, including low-cost phones with 2 GB of RAM. Size
 | 🌱 **A daily climate mission** | One small action a day — save water, plant a tree, sort your waste — proven with a photo and a short story. Build your streak. |
 | 👥 **Community** | Share your eco actions, rate and comment on others' photos, and climb the leaderboard. Points come from other members' ratings. |
 | 🔔 **Notifications** | Know when someone rates or comments on your photo, and never miss an announcement. |
+| 🌙 **Light or dark** | Switch the whole app to dark mode (or back) from your profile. |
 | 🗣️ **Your language, everywhere** | Choose Kinyarwanda or English once — screens, news, quizzes, scan results, notifications and emails all follow. Change it any time in your profile. |
 
 ## Screenshots
@@ -76,10 +77,13 @@ Works on Android 7.0 and newer, including low-cost phones with 2 GB of RAM. Size
 - Your email is never shown to other members.
 - Every photo can be **reported** in two taps. Our team reviews reports quickly, and accounts that post irrelevant or harmful content are **banned for good**.
 - You can delete your account and everything in it at any time from your profile.
+- The **Privacy Policy** and **Terms of Use** are in the app (Profile → Privacy & Terms), in English and Kinyarwanda.
 
 ## Questions or ideas?
 
-Open an [issue](https://github.com/humuraelvin/EcoFun/issues) — feedback in Kinyarwanda or English is welcome.
+In the app, go to **Profile → Contact support**, describe the problem and send it. Our team replies right there and you get a notification.
+
+You can also open an [issue](https://github.com/humuraelvin/EcoFun/issues) — feedback in Kinyarwanda or English is welcome.
 
 ---
 

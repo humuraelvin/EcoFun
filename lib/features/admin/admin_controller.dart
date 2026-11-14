@@ -8,6 +8,9 @@ import '../../data/models.dart';
 import '../../data/repositories.dart';
 import '../../data/supa.dart';
 
+/// A prepared announcement (English and Kinyarwanda) that the Announce tab fills in.
+typedef AnnounceDraft = ({({String title, String body}) en, ({String title, String body}) rw});
+
 /// State for the admin portal: dashboard, members, posts and announcements.
 class AdminController extends GetxController {
   static AdminController get to => Get.find();
@@ -31,6 +34,9 @@ class AdminController extends GetxController {
 
   final announcements = <Announcement>[].obs;
   final announcementsLoading = true.obs;
+
+  /// Set by the support inbox after a problem is fixed for everyone; the Announce tab picks it up.
+  final announceDraft = Rxn<AnnounceDraft>();
 
   Timer? _debounce;
   int _usersRequest = 0;

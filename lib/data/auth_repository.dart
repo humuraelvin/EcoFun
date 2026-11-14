@@ -21,7 +21,8 @@ abstract final class AuthRepository {
     final res = await supa.auth.signUp(
       email: email.trim().toLowerCase(),
       password: password,
-      data: {'full_name': name.trim(), 'lang': lang},
+      // The member ticked "I agree to the Terms of Use and Privacy Policy" before signing up.
+      data: {'full_name': name.trim(), 'lang': lang, 'terms_accepted_at': DateTime.now().toUtc().toIso8601String()},
     );
     // Supabase returns a user with no identities when the email is already registered.
     if (res.user != null && (res.user!.identities?.isEmpty ?? false)) {

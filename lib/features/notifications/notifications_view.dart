@@ -94,6 +94,11 @@ class _NotificationsViewState extends State<NotificationsView> {
         if (n.postId != null) Get.toNamed(Routes.post, arguments: n.postId);
       case 'post_reported':
         Get.toNamed(Routes.adminReports);
+      case 'support_new':
+        Get.toNamed(Routes.adminSupport);
+      case 'support_reply':
+      case 'support_fixed':
+        Get.toNamed(Routes.support);
       case 'announcement':
         _showAnnouncement(n);
       case 'new_user':

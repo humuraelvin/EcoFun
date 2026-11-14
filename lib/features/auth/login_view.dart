@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -34,7 +35,18 @@ class _LoginViewState extends State<LoginView> {
   _Mode _mode = _Mode.signIn;
   bool _busy = false;
   bool _googleBusy = false;
+  bool _agreed = false;
   String? _error;
+  late final _termsTap = TapGestureRecognizer()..onTap = () => _openLegal('terms');
+  late final _privacyTap = TapGestureRecognizer()..onTap = () => _openLegal('privacy');
+  // The footer line has its own pair: a recognizer belongs to one piece of text.
+  late final _footerTermsTap = TapGestureRecognizer()..onTap = () => _openLegal('terms');
+  late final _footerPrivacyTap = TapGestureRecognizer()..onTap = () => _openLegal('privacy');
+
+  void _openLegal(String doc) {
+    FocusScope.of(context).unfocus();
+    Get.toNamed(Routes.legal, arguments: doc);
+  }
 
   @override
   void dispose() {
@@ -42,6 +54,10 @@ class _LoginViewState extends State<LoginView> {
     _email.dispose();
     _password.dispose();
     _code.dispose();
+    _termsTap.dispose();
+    _privacyTap.dispose();
+    _footerTermsTap.dispose();
+    _footerPrivacyTap.dispose();
     super.dispose();
   }
 
@@ -107,6 +123,10 @@ class _LoginViewState extends State<LoginView> {
       });
     }
     if (_name.text.trim().length < 2) return setState(() => _error = 'auth.enterName'.tr());
+    if (!_agreed) {
+      HapticFeedback.heavyImpact();
+      return setState(() => _error = 'auth.mustAgree'.tr());
+    }
     return _run(() async {
       final outcome = await AuthRepository.signUp(_name.text, email, _password.text, lang: context.locale.languageCode);
       if (outcome == SignUpOutcome.signedIn) {
@@ -118,6 +138,10 @@ class _LoginViewState extends State<LoginView> {
   }
 
   Future<void> _google() async {
+    if (_mode == _Mode.signUp && !_agreed) {
+      HapticFeedback.heavyImpact();
+      return setState(() => _error = 'auth.mustAgree'.tr());
+    }
     setState(() {
       _googleBusy = true;
       _error = null;
@@ -215,6 +239,7 @@ class _LoginViewState extends State<LoginView> {
           textInputAction: TextInputAction.done,
           onSubmitted: (_) => _submit(),
         ),
+        if (signUp) _agreement(c),
         _errorText(c),
         const SizedBox(height: 18),
         AppButton(
@@ -240,10 +265,66 @@ class _LoginViewState extends State<LoginView> {
           _googleButton(c),
         ],
         const SizedBox(height: 24),
-        Text('auth.terms'.tr(), textAlign: TextAlign.center, style: AppText.caption.c(c.tertiaryLabel)),
+        Text.rich(
+          TextSpan(children: [
+            TextSpan(text: 'auth.termsLead'.tr()),
+            TextSpan(text: 'legal.terms'.tr(), recognizer: _footerTermsTap, style: TextStyle(color: c.brand, fontWeight: FontWeight.w600)),
+            TextSpan(text: 'auth.and'.tr()),
+            TextSpan(text: 'legal.privacy'.tr(), recognizer: _footerPrivacyTap, style: TextStyle(color: c.brand, fontWeight: FontWeight.w600)),
+            TextSpan(text: 'auth.termsTail'.tr()),
+          ]),
+          textAlign: TextAlign.center,
+          style: AppText.caption.c(c.tertiaryLabel),
+        ),
       ],
     );
   }
+
+  /// Sign-up only: the member must agree to the Terms of Use and Privacy Policy.
+  Widget _agreement(AppColors c) => Padding(
+        padding: const EdgeInsets.only(top: 14),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() {
+                _agreed = !_agreed;
+                if (_agreed && _error == 'auth.mustAgree'.tr()) _error = null;
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(2, 0, 10, 6),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: _agreed ? c.brand : Colors.transparent,
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(color: _agreed ? c.brand : c.tertiaryLabel, width: 1.8),
+                ),
+                child: _agreed ? Icon(CupertinoIcons.checkmark_alt, size: 17, color: c.onBrand) : null,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text.rich(
+                TextSpan(children: [
+                  TextSpan(text: 'auth.agreeLead'.tr()),
+                  TextSpan(text: 'legal.terms'.tr(), recognizer: _termsTap, style: TextStyle(color: c.brand, fontWeight: FontWeight.w600)),
+                  TextSpan(text: 'auth.and'.tr()),
+                  TextSpan(text: 'legal.privacy'.tr(), recognizer: _privacyTap, style: TextStyle(color: c.brand, fontWeight: FontWeight.w600)),
+                  TextSpan(text: 'auth.agreeTail'.tr()),
+                ]),
+                style: AppText.subhead.c(c.secondaryLabel),
+              ),
+            ),
+          ),
+        ]),
+      );
 
   Widget _segment(String text) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 9),

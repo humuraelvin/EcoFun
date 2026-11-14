@@ -23,6 +23,10 @@ Future<T> rpc<T>(String fn, [Map<String, dynamic>? params]) async {
 /// Server messages we know how to translate. Everything else falls back to a generic line.
 const _serverMessageKeys = {
   "Read today's story first.": 'errors.readFirst',
+  'Describe the problem in a few more words.': 'support.tooShort',
+  'You already have 5 open messages. Please wait for a reply.': 'support.tooMany',
+  'This message is no longer available.': 'support.gone',
+  'Write a reply.': 'support.writeReply',
   "Finish today's quiz first.": 'errors.quizFirst',
   "You already completed today's mission.": 'errors.missionDone',
   'Answer every question first.': 'errors.answerAll',

@@ -82,6 +82,27 @@ class _Body extends StatelessWidget {
         ),
         const SizedBox(height: 14),
       ],
+      if (d['open_support'] > 0) ...[
+        Pressable(
+          onTap: () async {
+            await Get.toNamed(Routes.adminSupport);
+            AdminController.to.refreshDashboard();
+          },
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: const Color(0xFF0A84FF).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(18)),
+            child: Row(children: [
+              const Icon(CupertinoIcons.chat_bubble_2_fill, color: Color(0xFF0A84FF)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text('support.banner'.plural(d['open_support']), style: AppText.headline.c(c.label)),
+              ),
+              const Icon(CupertinoIcons.chevron_right, color: Color(0xFF0A84FF), size: 18),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 14),
+      ],
       StatGrid(children: [
         StatTile(icon: CupertinoIcons.person_2_fill, color: c.brand, value: d['members'], label: 'admin.statMembers'.tr(),
             sub: 'admin.statNewToday'.tr(args: ['${d['new_today']}'])),

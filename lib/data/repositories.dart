@@ -324,6 +324,17 @@ abstract final class AdminRepository {
     }
   }
 
+  /// [status]: 'open' (waiting for an answer) or 'done' (answered or fixed).
+  static Future<List<SupportTicket>> support({String status = 'open'}) async {
+    final json = await rpc<dynamic>('admin_support', {'p_status': status});
+    return (json as List).map((e) => SupportTicket.fromJson(_map(e))).toList();
+  }
+
+  /// Answers a member's message. [fixed]: the problem affected everyone and is now fixed.
+  static Future<void> answerSupport(String id, String reply, {bool fixed = false}) async {
+    await rpc<dynamic>('admin_answer_support', {'p_id': id, 'p_reply': reply, 'p_fixed': fixed});
+  }
+
   static Future<String> translate(String text, String from, String to) async =>
       (await rpc<dynamic>('admin_translate', {'p_text': text, 'p_from': from, 'p_to': to})) as String? ?? '';
 
@@ -370,4 +381,15 @@ abstract final class ProfileRepository {
     await StorageService.instance.deleteAllMine();
     await rpc<dynamic>('delete_my_account');
   }
+}
+
+abstract final class SupportRepository {
+  static Future<List<SupportTicket>> mine() async {
+    final json = await rpc<dynamic>('my_support');
+    return (json as List).map((e) => SupportTicket.fromJson(_map(e))).toList();
+  }
+
+  /// [category]: bug, account, points, idea or other.
+  static Future<SupportTicket> send(String category, String message) async =>
+      SupportTicket.fromJson(_map(await rpc<dynamic>('submit_support', {'p_category': category, 'p_message': message.trim()})));
 }

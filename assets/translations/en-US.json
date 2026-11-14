@@ -89,7 +89,13 @@
     "sendCode": "Send code",
     "resetPassword": "Set new password",
     "resendCode": "Send a new code",
-    "passwordUpdated": "Password updated. Welcome back!"
+    "passwordUpdated": "Password updated. Welcome back!",
+    "termsLead": "By continuing you agree to our ",
+    "and": " and ",
+    "termsTail": ". Your email is never shown to other members.",
+    "agreeLead": "I have read and agree to the ",
+    "agreeTail": ".",
+    "mustAgree": "Please agree to the Terms of Use and Privacy Policy to create your account."
   },
   "home": {
     "goodMorning": "Good morning",
@@ -332,7 +338,8 @@
     "about": "EcoFun · Climate action for Rwanda. News from Taarifa, Green Africa, KT Press, Rebero, Umuseke and Izuba.",
     "emailUpdates": "Email updates",
     "emailUpdatesOn": "You'll get an email when you reach a streak milestone.",
-    "emailUpdatesOff": "Streak emails are off. Security emails still arrive."
+    "emailUpdatesOff": "Streak emails are off. Security emails still arrive.",
+    "darkMode": "Dark mode"
   },
   "admin": {
     "portal": "Admin portal",
@@ -518,7 +525,10 @@
     "reportActioned": "Thanks for your report",
     "reportActionedBody": "We removed the post you reported.",
     "reportDismissed": "Report reviewed",
-    "reportDismissedBody": "We checked the post you reported and kept it up."
+    "reportDismissedBody": "We checked the post you reported and kept it up.",
+    "supportNew": "{} sent a support message",
+    "supportReply": "Support replied to your message",
+    "supportFixed": "The problem you reported is fixed"
   },
   "points": {
     "quiz": "Quiz",
@@ -587,5 +597,66 @@
     "banned": "Post removed and member banned",
     "removed": "Post removed",
     "dismissed": "Post kept — reports closed"
+  },
+  "legal": {
+    "title": "Privacy & Terms",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Use",
+    "updated": "Last updated: {}"
+  },
+  "support": {
+    "title": "Contact support",
+    "intro": "Something not working, or a question about your account or points? Tell us here. An admin will reply on this page and you'll get a notification.",
+    "whatAbout": "WHAT IS IT ABOUT?",
+    "cat_bug": "App problem",
+    "cat_account": "Account",
+    "cat_points": "Points",
+    "cat_idea": "Idea",
+    "cat_other": "Other",
+    "placeholder": "Describe what happened, on which screen, and what you expected…",
+    "send": "Send message",
+    "sent": "Message sent. We'll reply here soon.",
+    "tooShort": "Describe the problem in a few more words.",
+    "tooMany": "You already have 5 messages waiting. Please wait for a reply.",
+    "gone": "This message is no longer available.",
+    "writeReply": "Write a reply first.",
+    "myMessages": "My messages",
+    "none": "You haven't contacted support yet.",
+    "waiting": "Waiting for a reply from the EcoFun team.",
+    "teamReply": "EcoFun team",
+    "fixedDefault": "Thanks for telling us! This problem has been fixed for everyone.",
+    "statusOpen": "Waiting",
+    "statusReplied": "Answered",
+    "statusFixed": "Fixed",
+    "adminTitle": "Support messages",
+    "tabOpen": "Waiting",
+    "tabDone": "Answered",
+    "adminEmpty": "No messages waiting",
+    "adminEmptyDone": "No answered messages yet",
+    "reply": "Reply",
+    "editReply": "Edit reply",
+    "fixedForAll": "Fixed for all",
+    "replyTo": "Reply to {}",
+    "replyHint": "Only this member sees your reply, on their Contact support page.",
+    "fixedTitle": "Fixed for everyone",
+    "fixedHint": "Use this when the problem affected the whole app. The member is told it's fixed, and you can announce it to everyone next.",
+    "replyPlaceholder": "Write your reply…",
+    "sendReply": "Send reply",
+    "markFixed": "Mark as fixed",
+    "replySent": "Reply sent",
+    "markedFixed": "Marked as fixed",
+    "fixedDefaultAdmin": "Thanks for telling us! This problem has been fixed for everyone. Please update or restart EcoFun if you still see it.",
+    "announceTitle": "Tell everyone?",
+    "announceBody": "Post an announcement so every member knows this problem is fixed. We'll prepare a draft for you.",
+    "notNow": "Not now",
+    "announce": "Write announcement",
+    "draftTitleEn": "Fixed: a problem you may have noticed",
+    "draftBodyEn": "Thanks to members who reported it, we fixed this problem: \"{}\". Everything should work normally now. If you still see it, restart EcoFun or contact support from your profile.",
+    "draftTitleRw": "Twakemuye ikibazo mushobora kuba mwarabonye",
+    "draftBodyRw": "Turashimira abanyamuryango batumenyesheje ikibazo, ubu cyakemutse. Ibintu byose bigomba gukora neza. Niba ukibona ikibazo, ongera ufungure EcoFun cyangwa uvugane n'ubufasha uhereye kuri porofayili yawe.",
+    "banner": {
+      "one": "{} support message is waiting",
+      "other": "{} support messages are waiting"
+    }
   }
 }

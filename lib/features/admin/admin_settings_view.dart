@@ -11,6 +11,7 @@ import '../../core/utils/language.dart';
 import '../../core/widgets/cards.dart';
 import '../../core/widgets/large_title_page.dart';
 import '../../core/widgets/photos.dart';
+import '../../core/widgets/theme_toggle.dart';
 import '../../data/supa.dart';
 
 class AdminSettingsView extends StatelessWidget {
@@ -81,12 +82,25 @@ class AdminSettingsView extends StatelessWidget {
                 onTap: () => Get.toNamed(Routes.notifications),
               ),
               GroupedRow(
+                icon: CupertinoIcons.chat_bubble_2_fill,
+                iconColor: const Color(0xFF0A84FF),
+                title: 'support.adminTitle'.tr(),
+                onTap: () => Get.toNamed(Routes.adminSupport),
+              ),
+              GroupedRow(
+                icon: CupertinoIcons.flag_fill,
+                iconColor: const Color(0xFFFF3B30),
+                title: 'reports.title'.tr(),
+                onTap: () => Get.toNamed(Routes.adminReports),
+              ),
+              GroupedRow(
                 icon: CupertinoIcons.globe,
                 iconColor: const Color(0xFF0A84FF),
                 title: 'profile.language'.tr(),
                 value: context.locale.languageCode == 'rw' ? 'Ikinyarwanda' : 'English',
                 onTap: () => _language(context),
               ),
+              const DarkModeRow(),
               GroupedRow(
                 icon: CupertinoIcons.device_phone_portrait,
                 iconColor: c.brand,

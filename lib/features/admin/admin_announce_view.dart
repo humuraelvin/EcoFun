@@ -37,8 +37,28 @@ class _AdminAnnounceViewState extends State<AdminAnnounceView> {
   bool _sending = false;
   String? _translating; // 'rw' or 'en'
 
+  Worker? _draftWorker;
+
+  @override
+  void initState() {
+    super.initState();
+    // "Fixed for everyone" in the support inbox prepares an announcement here.
+    _applyDraft(ctrl.announceDraft.value);
+    _draftWorker = ever<AnnounceDraft?>(ctrl.announceDraft, _applyDraft);
+  }
+
+  void _applyDraft(AnnounceDraft? d) {
+    if (d == null) return;
+    _titleEn.text = d.en.title;
+    _bodyEn.text = d.en.body;
+    _titleRw.text = d.rw.title;
+    _bodyRw.text = d.rw.body;
+    ctrl.announceDraft.value = null;
+  }
+
   @override
   void dispose() {
+    _draftWorker?.dispose();
     for (final t in [_titleEn, _bodyEn, _titleRw, _bodyRw]) {
       t.dispose();
     }
